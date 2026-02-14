@@ -19,10 +19,17 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
 
   const playAudioMediation = async () => {
     if (isSpeaking) return;
+    
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+      alert(language === 'ar' ? "مفتاح API غير متوفر." : "מפתח API לא הוגדר.");
+      return;
+    }
+
     setIsSpeaking(true);
     
     try {
-      const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) });
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: t.step1_tts }] }],
@@ -35,6 +42,7 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        
         const decode = (base64: string) => {
           const binaryString = atob(base64);
           const bytes = new Uint8Array(binaryString.length);
@@ -56,8 +64,11 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         source.connect(audioContext.destination);
         source.onended = () => setIsSpeaking(false);
         source.start();
+      } else {
+        setIsSpeaking(false);
       }
     } catch (error) {
+      console.error("Audio playback error:", error);
       setIsSpeaking(false);
     }
   };
@@ -73,7 +84,7 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
             <div className="inline-block bg-blue-500 text-white px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest">{t.audioGuide}</div>
             <h2 className="text-4xl font-black">{t.step1_name}</h2>
             <p className="text-blue-100 text-lg leading-relaxed">{t.step1_instr}</p>
-            <button onClick={playAudioMediation} disabled={isSpeaking} className={`flex items-center gap-4 px-10 py-5 rounded-[2rem] font-black text-xl transition shadow-2xl border-b-4 ${isSpeaking ? 'bg-slate-700' : 'bg-emerald-600 border-emerald-800 text-white'}`}>
+            <button onClick={playAudioMediation} disabled={isSpeaking} className={`flex items-center gap-4 px-10 py-5 rounded-[2rem] font-black text-xl transition shadow-2xl border-b-4 ${isSpeaking ? 'bg-slate-700' : 'bg-emerald-600 border-emerald-800 text-white active:scale-95'}`}>
               {isSpeaking ? t.reading : t.listenInstructions}
             </button>
           </div>
@@ -85,22 +96,22 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         <div className="bg-slate-50 p-8 rounded-3xl border border-slate-100 mb-10 grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <label className="block font-bold text-slate-700 mb-2">{t.fullName}:</label>
-            <input type="text" value={data.fullName} onChange={(e) => onChange({ ...data, fullName: e.target.value })} className="w-full p-5 rounded-2xl border-2 outline-none text-right" />
+            <input type="text" value={data.fullName || ''} onChange={(e) => onChange({ ...data, fullName: e.target.value })} className="w-full p-5 rounded-2xl border-2 outline-none text-right focus:border-blue-500 bg-white" />
           </div>
           <div>
             <label className="block font-bold text-slate-700 mb-2">{t.studentId}:</label>
-            <input type="text" value={data.studentId} onChange={(e) => onChange({ ...data, studentId: e.target.value })} className="w-full p-5 rounded-2xl border-2 outline-none text-right" />
+            <input type="text" value={data.studentId || ''} onChange={(e) => onChange({ ...data, studentId: e.target.value })} className="w-full p-5 rounded-2xl border-2 outline-none text-right focus:border-blue-500 bg-white" />
           </div>
           <div>
             <label className="block font-bold text-slate-700 mb-2">{t.email}:</label>
-            <input type="email" value={data.email} onChange={(e) => onChange({ ...data, email: e.target.value })} className="w-full p-5 rounded-2xl border-2 outline-none text-right" placeholder="example@email.com" />
+            <input type="email" value={data.email || ''} onChange={(e) => onChange({ ...data, email: e.target.value })} className="w-full p-5 rounded-2xl border-2 outline-none text-right placeholder:text-slate-300 focus:border-blue-500 bg-white" placeholder="example@email.com" />
           </div>
         </div>
         <div className="mb-4 flex justify-between items-center">
           <label className="block font-black text-slate-700 text-xl">{language === 'ar' ? 'وصف الموقف:' : 'תיאור המקרה:'}</label>
           <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-black">10 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
         </div>
-        <textarea value={answer} onChange={(e) => onAnswerChange(e.target.value)} className="w-full p-8 rounded-[2.5rem] border-2 min-h-[250px] outline-none text-right" placeholder={t.describeCase}></textarea>
+        <textarea value={answer || ''} onChange={(e) => onAnswerChange(e.target.value)} className="w-full p-8 rounded-[2.5rem] border-2 min-h-[250px] outline-none text-right focus:border-blue-500 bg-white" placeholder={t.describeCase}></textarea>
       </div>
     </div>
   );

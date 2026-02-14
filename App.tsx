@@ -11,7 +11,7 @@ import Step6 from './components/steps/Step6';
 import TeacherDashboard from './components/TeacherDashboard';
 import PresentationMode from './components/PresentationMode';
 
-const STORAGE_KEY = 'self_regulation_app_state';
+const STORAGE_KEY = 'self_regulation_app_state_v2';
 const TEACHER_PASSWORD = 'Lecturer2025';
 
 const App: React.FC = () => {
@@ -23,8 +23,19 @@ const App: React.FC = () => {
   const [authError, setAuthError] = useState(false);
   
   const [state, setState] = useState<AppState>(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Basic validation to ensure we have a valid state object
+        if (parsed && typeof parsed.step === 'number') {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load saved state", e);
+    }
+    
     return {
       step: 1,
       language: 'ar',
@@ -52,34 +63,34 @@ const App: React.FC = () => {
   const currentData = importedState || state;
 
   const score = useMemo(() => {
-    if (currentData.feedback) return currentData.feedback.finalGrade;
+    if (currentData?.feedback) return currentData.feedback.finalGrade;
     let total = 0;
     const data = currentData;
     
-    if (data.student.fullName.length > 2) total += 10;
-    if (data.emotions.length >= 3) total += 10;
-    if (data.answers[1]?.trim().length > 10) total += 5;
-    if (data.answers[2]?.trim().length > 10) total += 5;
-    if (data.answers[3]?.trim().length > 10) total += 5;
-    if (data.answers[5]?.trim().length > 20) total += 10;
-    if (data.answers[8]?.trim().length > 20) total += 7;
-    if (data.answers[10]?.trim().length > 20) total += 8;
-    if (data.answers[11]?.trim().length > 10) total += 4;
-    if (data.answers[12]?.trim().length > 10) total += 4;
-    if (data.answers[13]?.trim().length > 10) total += 4;
-    if (data.answers[14]?.trim().length > 10) total += 4;
-    if (data.answers[15]?.trim().length > 10) total += 4;
-    if (data.answers[16]?.trim().length > 10) total += 5;
-    if (data.answers[17]?.trim().length > 10) total += 5;
-    if (data.answers[18]?.trim().length > 10) total += 5;
-    if (data.answers[19]?.trim().length > 10) total += 5;
+    if (data?.student?.fullName?.length > 2) total += 10;
+    if (data?.emotions?.length >= 3) total += 10;
+    if (data?.answers?.[1]?.trim().length > 10) total += 5;
+    if (data?.answers?.[2]?.trim().length > 10) total += 5;
+    if (data?.answers?.[3]?.trim().length > 10) total += 5;
+    if (data?.answers?.[5]?.trim().length > 20) total += 10;
+    if (data?.answers?.[8]?.trim().length > 20) total += 7;
+    if (data?.answers?.[10]?.trim().length > 20) total += 8;
+    if (data?.answers?.[11]?.trim().length > 10) total += 4;
+    if (data?.answers?.[12]?.trim().length > 10) total += 4;
+    if (data?.answers?.[13]?.trim().length > 10) total += 4;
+    if (data?.answers?.[14]?.trim().length > 10) total += 4;
+    if (data?.answers?.[15]?.trim().length > 10) total += 4;
+    if (data?.answers?.[16]?.trim().length > 10) total += 5;
+    if (data?.answers?.[17]?.trim().length > 10) total += 5;
+    if (data?.answers?.[18]?.trim().length > 10) total += 5;
+    if (data?.answers?.[19]?.trim().length > 10) total += 5;
     
     return Math.min(100, total);
   }, [currentData]);
 
   const updateState = (updates: Partial<AppState>) => setState(prev => ({ ...prev, ...updates }));
   const updateAnswer = (index: number, value: string) => {
-    if (state.isSubmitted) return; // מניעת שינוי תשובות לאחר הגשה
+    if (state.isSubmitted) return; 
     const newAnswers = [...state.answers];
     newAnswers[index] = value;
     updateState({ answers: newAnswers });
@@ -180,7 +191,6 @@ const App: React.FC = () => {
     );
   }
 
-  // במידה והוגש, ננעל על שלב 6
   const currentStep = state.isSubmitted ? 6 : state.step;
 
   return (
@@ -196,7 +206,7 @@ const App: React.FC = () => {
       isLocked={state.isSubmitted}
     >
       {currentStep === 1 && !state.feedback && (
-        <div className="mb-8 bg-blue-50/50 border-2 border-blue-200 rounded-[2.5rem] p-8 text-right">
+        <div className="mb-8 bg-blue-50/50 border-2 border-blue-200 rounded-[2.5rem] p-8 text-right animate-fade-in">
           <h3 className="text-xl font-black text-blue-900 mb-4 flex items-center gap-2">📩 {(t as any).feedback_title}</h3>
           <div className="flex flex-col md:flex-row gap-4">
             <input type="text" value={feedbackInput} onChange={(e) => setFeedbackInput(e.target.value)} placeholder={(t as any).feedback_placeholder} className="flex-grow p-4 rounded-xl border-2 outline-none text-right shadow-sm focus:border-blue-400" />
