@@ -1,267 +1,195 @@
 
-import React from 'react';
-import { AppState } from '../types';
+import React, { useState } from 'react';
+import { AppState, FeedbackData } from '../types';
 
 interface TeacherDashboardProps {
   state: AppState;
   score: number;
   onBack: () => void;
+  onUpdateProject?: (updates: Partial<AppState>) => void;
 }
 
-const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ state, score, onBack }) => {
+const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ state, score, onBack, onUpdateProject }) => {
+  const [finalGrade, setFinalGrade] = useState(score);
+  const [comments, setComments] = useState('');
+  const [feedbackCode, setFeedbackCode] = useState('');
+  const [activeTab, setActiveTab] = useState<'grading' | 'management'>('grading');
+  const [templateText, setTemplateText] = useState(state.answers[0] || '');
+
   const sections = [
-    { title: "وصف الحالة (المرحلة 1)", max: 10, step: 1 },
-    { title: "تفصيل المشاعر (المرحلة 2)", max: 5, step: 2 },
-    { title: "الأفكار (المرحلة 2)", max: 5, step: 2 },
-    { title: "الدافع (المرحلة 2)", max: 5, step: 2 },
-    { title: "الاحتياجات (المرحلة 2)", max: 5, step: 2 },
-    { title: "التنظيم العاطفي (المرحلة 3)", max: 6, step: 3 },
-    { title: "الغايات والأهداف (المرحلة 3)", max: 6, step: 3 },
-    { title: "الكفاءة الذاتية (المرحلة 3)", max: 6, step: 3 },
-    { title: "تحليل الحلقة (المرحلة 4)", max: 6, step: 4 },
-    { title: "مراحل التنظيم (المرحلة 4)", max: 6, step: 4 },
-    { title: "بنك الأفكار (المرحلة 5)", max: 3, step: 5 },
-    { title: "الأداة 1 (المرحلة 5)", max: 3, step: 5 },
-    { title: "الأداة 2 (المرحلة 5)", max: 3, step: 5 },
-    { title: "الأداة 3 (المرحلة 5)", max: 3, step: 5 },
-    { title: "الأداة 4 (المرحلة 5)", max: 3, step: 5 },
-    { title: "التعرف المبكر (المرحلة 6)", max: 5, step: 6 },
-    { title: "الخطوة الأولى (المرحلة 6)", max: 5, step: 6 },
-    { title: "إشباع الاحتياجات (المرحلة 6)", max: 5, step: 6 }
+    { title: "תיאור המקרה (שלב 1)", max: 10 },
+    { title: "ניטור רגשות (שלב 2)", max: 5 },
+    { title: "ניטור מחשבות (שלב 2)", max: 5 },
+    { title: "ניטור צרכים (שלב 2)", max: 5 },
+    { title: "בקרה וויסות (שלב 3)", max: 10 },
+    { title: "הערכת תוצאה (שלב 4)", max: 7 },
+    { title: "ניתוח לולאת משוב (שלב 4)", max: 8 },
+    { title: "הבניה מחדש (שלב 5)", max: 4 },
+    { title: "ויסות רגשי - כלים (שלב 5)", max: 4 },
+    { title: "ניהול זמן - כלים (שלב 5)", max: 4 },
+    { title: "מטרות וערכים - כלים (שלב 5)", max: 4 },
+    { title: "תכנון והערכה - כלים (שלב 5)", max: 4 },
+    { title: "סימני אזהרה (שלב 6)", max: 5 },
+    { title: "צעד מעשי ראשון (שלב 6)", max: 5 },
+    { title: "שמירה על התקדמות (שלב 6)", max: 5 },
+    { title: "מה אעשה אחרת (שלב 6)", max: 5 }
   ];
 
-  const calculateFieldScore = (index: number, content: string): number => {
-    if (!content || content.trim().length === 0) return 0;
-    const length = content.trim().length;
-    const max = sections[index].max;
-    
-    if (index === 0) return Math.min(max, Math.floor(length / 10)); // Step 1
-    if (index >= 1 && index <= 4) return length > 15 ? max : 0; // Step 2 fields
-    if (index >= 5 && index <= 9) return length > 20 ? max : 0; // Step 3-4 fields
-    if (index >= 10 && index <= 14) return length > 10 ? max : 0; // Step 5 fields
-    if (index >= 15) return length > 15 ? max : 0; // Step 6 fields
-    return 0;
+  const safeBtoa = (str: string) => {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode(parseInt(p1, 16))));
   };
 
-  // Grouped progress calculation
-  const getStepProgress = (stepNumber: number) => {
-    const stepFields = sections.filter(s => s.step === stepNumber);
-    let earned = 0;
-    let max = stepFields.reduce((acc, curr) => acc + curr.max, 0);
-
-    sections.forEach((s, idx) => {
-      if (s.step === stepNumber) {
-        earned += calculateFieldScore(idx, state.answers[idx]);
-      }
-    });
-
-    // Special additions
-    if (stepNumber === 2) {
-      max += 10;
-      if (state.emotions.length >= 3) earned += 10;
-      else if (state.emotions.length > 0) earned += 5;
-    }
-    if (stepNumber === 5) {
-      max += 5;
-      if (state.selectedTools.length > 0) earned += 5;
-    }
-    if (stepNumber === 6) {
-      max += 5;
-      if (state.isSubmitted) earned += 5;
-    }
-
-    return { earned, max, percent: Math.round((earned / max) * 100) };
+  const generateFeedback = () => {
+    const feedback: FeedbackData = { finalGrade, comments, teacherName: "המרצה", timestamp: new Date().toLocaleDateString('he-IL') };
+    setFeedbackCode(safeBtoa(JSON.stringify(feedback)));
   };
 
-  const completionRate = Math.round((state.answers.filter(a => a.trim().length > 0).length / 18) * 100);
+  const exportProjectBackup = () => {
+    const backupData = {
+      timestamp: new Date().toISOString(),
+      config: state
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `backup_project_regulation_${new Date().toLocaleDateString()}.json`;
+    link.click();
+  };
+
+  const saveTemplate = () => {
+    if (onUpdateProject) {
+      const newAnswers = [...state.answers];
+      newAnswers[0] = templateText;
+      onUpdateProject({ answers: newAnswers });
+      alert("התבנית נשמרה! סטודנטים שייכנסו לאפליקציה יראו את תיאור המקרה הזה כברירת מחדל.");
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-10 font-sans text-right" dir="rtl">
+    <div className="min-h-screen bg-slate-900 p-4 md:p-10 font-sans text-right" dir="rtl">
       <div className="max-w-7xl mx-auto">
-        
-        {/* Header Section */}
-        <header className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100 gap-6">
+        <header className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-8 rounded-[3rem] shadow-2xl border-b-8 border-blue-500 gap-6">
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-lg">
-              📊
-            </div>
+            <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-lg">👑</div>
             <div>
-              <h1 className="text-3xl font-black text-slate-800 tracking-tight">تحليل أداء الطالب</h1>
-              <p className="text-slate-500 font-medium">{state.student.fullName || 'طالب غير معروف'} | {state.student.studentId || 'بدون رقم هوية'}</p>
+              <h1 className="text-3xl font-black text-slate-800">מרכז ניהול המרצה</h1>
+              <p className="text-slate-500 font-medium">ניהול משימות, בדיקה וגיבוי מערכת</p>
             </div>
           </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="text-left md:text-right">
-              <span className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">النتيجة الإجمالية</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-5xl font-black text-blue-600">{score}</span>
-                <span className="text-xl font-bold text-slate-300">/ 100</span>
-              </div>
-            </div>
-            <div className="h-12 w-px bg-slate-200 mx-2 hidden md:block"></div>
-            <button 
-              onClick={onBack}
-              className="bg-slate-100 px-8 py-4 rounded-2xl text-slate-600 hover:bg-slate-200 hover:text-slate-900 transition-all font-bold border border-slate-200 shadow-sm"
-            >
-              العودة للمهمة
-            </button>
+          <div className="flex gap-4">
+            <button onClick={onBack} className="bg-slate-100 px-8 py-4 rounded-2xl text-slate-600 font-bold border border-slate-200 hover:bg-slate-200 transition-all">חזרה</button>
           </div>
         </header>
 
-        {/* Overview Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-[2rem] shadow-md border border-slate-100 flex items-center gap-4">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-2xl flex items-center justify-center text-xl">✅</div>
-            <div>
-              <div className="text-xs font-bold text-slate-400">نسبة الاكتمال</div>
-              <div className="text-2xl font-black text-slate-800">{completionRate}%</div>
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-[2rem] shadow-md border border-slate-100 flex items-center gap-4">
-            <div className="w-12 h-12 bg-pink-100 text-pink-600 rounded-2xl flex items-center justify-center text-xl">❤️</div>
-            <div>
-              <div className="text-xs font-bold text-slate-400">المشاعر المحددة</div>
-              <div className="text-2xl font-black text-slate-800">{state.emotions.length} مشاعر</div>
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-[2rem] shadow-md border border-slate-100 flex items-center gap-4">
-            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center text-xl">🛠️</div>
-            <div>
-              <div className="text-xs font-bold text-slate-400">الأدوات المختارة</div>
-              <div className="text-2xl font-black text-slate-800">{state.selectedTools.length} أدوات</div>
-            </div>
-          </div>
-          <div className="bg-white p-6 rounded-[2rem] shadow-md border border-slate-100 flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-100 text-amber-600 rounded-2xl flex items-center justify-center text-xl">📬</div>
-            <div>
-              <div className="text-xs font-bold text-slate-400">حالة الإرسال</div>
-              <div className={`text-xl font-black ${state.isSubmitted ? 'text-emerald-600' : 'text-amber-600'}`}>
-                {state.isSubmitted ? 'تم الإرسال النهائي' : 'قيد العمل'}
-              </div>
-            </div>
-          </div>
+        <div className="flex gap-2 mb-8 bg-white/10 p-2 rounded-3xl w-fit mx-auto">
+          <button 
+            onClick={() => setActiveTab('grading')} 
+            className={`px-8 py-3 rounded-2xl font-black transition-all ${activeTab === 'grading' ? 'bg-blue-600 text-white shadow-lg' : 'text-blue-200 hover:bg-white/5'}`}
+          >
+            בדיקת עבודת סטודנט
+          </button>
+          <button 
+            onClick={() => setActiveTab('management')} 
+            className={`px-8 py-3 rounded-2xl font-black transition-all ${activeTab === 'management' ? 'bg-blue-600 text-white shadow-lg' : 'text-blue-200 hover:bg-white/5'}`}
+          >
+            ניהול וגיבוי הפרויקט
+          </button>
         </div>
 
-        {/* Score Distribution Overview */}
-        <div className="bg-white p-10 rounded-[3rem] shadow-xl border border-slate-100 mb-8">
-          <h2 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
-            <span className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-sm">📈</span>
-            توزيع الدرجات حسب المراحل
-          </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-            {[1, 2, 3, 4, 5, 6].map(step => {
-              const progress = getStepProgress(step);
-              const stepTitles = [
-                "وصف الحدث", "عالمي الداخلي", "السلوك والاستجابة", 
-                "التعلم والتحليل", "حقيبة الأدوات", "خطة العمل"
-              ];
-              const stepColors = [
-                "bg-blue-600", "bg-pink-500", "bg-indigo-600",
-                "bg-slate-700", "bg-emerald-600", "bg-amber-500"
-              ];
-              return (
-                <div key={step} className="space-y-3">
-                  <div className="flex justify-between items-end">
-                    <span className="font-bold text-slate-700">المرحلة {step}: {stepTitles[step-1]}</span>
-                    <span className="text-sm font-black text-slate-400">{progress.earned} / {progress.max}</span>
-                  </div>
-                  <div className="h-4 bg-slate-100 rounded-full overflow-hidden shadow-inner">
-                    <div 
-                      className={`h-full ${stepColors[step-1]} transition-all duration-1000 shadow-md`}
-                      style={{ width: `${progress.percent}%` }}
-                    ></div>
+        {activeTab === 'grading' ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="bg-white p-10 rounded-[3rem] shadow-2xl">
+                <div className="flex flex-col mb-8">
+                  <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3 mb-2">
+                    <span className="bg-slate-100 p-2 rounded-xl">📄</span>
+                    תשובות הסטודנט: {state.student.fullName || 'לא מזוהה'}
+                  </h2>
+                  <div className="flex gap-4 mr-12">
+                    {state.student.studentId && <span className="text-sm font-bold text-slate-400">ת"ז: {state.student.studentId}</span>}
+                    {state.student.email && <span className="text-sm font-bold text-blue-500">מייל: {state.student.email}</span>}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Detailed Answers Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white p-10 rounded-[3rem] shadow-2xl border border-slate-100">
-              <h2 className="text-2xl font-black mb-8 text-slate-800 underline decoration-blue-500 decoration-4 underline-offset-8">تفاصيل الإجابات</h2>
-              <div className="space-y-6 max-h-[800px] overflow-y-auto px-4 py-2 custom-scrollbar">
-                {state.answers.map((ans, i) => {
-                  const fieldScore = calculateFieldScore(i, ans);
-                  const isFull = fieldScore === sections[i].max;
-                  return (
-                    <div key={i} className={`p-6 rounded-2xl border-2 transition-all ${isFull ? 'bg-white border-emerald-100' : ans.trim().length > 0 ? 'bg-white border-amber-50' : 'bg-slate-50 border-slate-100'}`}>
-                      <div className="flex justify-between items-center mb-4">
-                        <span className="px-3 py-1 bg-slate-800 text-white rounded-lg text-[10px] font-black uppercase tracking-widest">{sections[i].title}</span>
-                        <div className="flex items-center gap-2">
-                          <span className={`text-sm font-black ${fieldScore > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>{fieldScore}</span>
-                          <span className="text-slate-300 text-xs">/ {sections[i].max}</span>
-                        </div>
+                
+                <div className="space-y-6 max-h-[600px] overflow-y-auto px-4 custom-scrollbar">
+                  {sections.map((sec, i) => (
+                    <div key={i} className="p-6 rounded-2xl border-2 bg-slate-50 border-slate-100">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="px-3 py-1 bg-blue-900 text-white rounded-lg text-[10px] font-black uppercase">{sec.title}</span>
+                        <span className="text-[10px] font-black text-slate-400">מקסימום: {sec.max} נק'</span>
                       </div>
-                      <p className={`text-lg leading-relaxed ${ans.trim().length > 0 ? 'text-slate-700' : 'text-slate-300 italic'}`}>
-                        {ans || 'لم يقم الطالب بالإجابة على هذا البند'}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-8">
-            {/* Emotions Breakdown */}
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-pink-600">تحليل المشاعر</h3>
-                <span className="bg-pink-50 text-pink-600 px-3 py-1 rounded-xl text-xs font-black">10 درجات</span>
-              </div>
-              {state.emotions.length > 0 ? (
-                <div className="space-y-4">
-                  {state.emotions.map((e, i) => (
-                    <div key={i} className="space-y-1">
-                      <div className="flex justify-between text-sm font-bold text-slate-600">
-                        <span>{e.name}</span>
-                        <span>{e.intensity}/10</span>
-                      </div>
-                      <div className="h-1.5 bg-slate-50 rounded-full overflow-hidden">
-                        <div className="h-full bg-pink-400" style={{ width: `${e.intensity * 10}%` }}></div>
-                      </div>
+                      <p className="text-lg text-slate-700 whitespace-pre-wrap leading-relaxed">{state.answers[i] || '---'}</p>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-slate-300 italic text-center py-4">لم يتم اختيار أي مشاعر</p>
-              )}
-            </div>
-
-            {/* Tools Breakdown */}
-            <div className="bg-white p-8 rounded-[2.5rem] shadow-xl border border-slate-100">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold text-indigo-600">الأدوات المفضلة</h3>
-                <span className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded-xl text-xs font-black">5 درجات</span>
               </div>
-              {state.selectedTools.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {state.selectedTools.map((tool, i) => (
-                    <span key={i} className="px-4 py-2 bg-indigo-50 text-indigo-700 rounded-xl text-xs font-bold border border-indigo-100 shadow-sm">
-                      {tool}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-slate-300 italic text-center py-4">لم يتم اختيار أي أدوات</p>
-              )}
             </div>
 
-            {/* Teacher Notes Area (Static Mockup) */}
-            <div className="bg-slate-900 p-8 rounded-[2.5rem] shadow-xl text-white">
-              <h3 className="text-xl font-bold mb-4">ملاحظات المعلم الخاصة</h3>
+            <div className="space-y-8">
+              <div className="bg-slate-800 p-8 rounded-[3rem] shadow-xl text-white sticky top-10 border-t-8 border-emerald-500">
+                <h3 className="text-2xl font-bold mb-6">📝 ציון ומשוב</h3>
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-slate-400 mb-2">ציון סופי:</label>
+                  <input 
+                    type="number" 
+                    value={finalGrade} 
+                    onChange={(e) => setFinalGrade(parseInt(e.target.value))} 
+                    className="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-3xl font-black text-emerald-400 outline-none text-center focus:border-emerald-500 transition-all" 
+                  />
+                </div>
+                <div className="mb-6">
+                  <label className="block text-sm font-bold text-slate-400 mb-2">הערות למרצה:</label>
+                  <textarea 
+                    value={comments} 
+                    onChange={(e) => setComments(e.target.value)} 
+                    className="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-sm h-32 outline-none text-right focus:border-blue-500 transition-all" 
+                    placeholder="כתבו כאן..."
+                  ></textarea>
+                </div>
+                {!feedbackCode ? (
+                  <button onClick={generateFeedback} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black text-xl transition-all shadow-xl">יצירת קוד משוב ✨</button>
+                ) : (
+                  <div className="bg-white/10 p-4 rounded-2xl border border-emerald-500/30 text-center animate-fade-in">
+                    <p className="text-xs font-bold text-emerald-400 mb-2">הקוד מוכן להעתקה:</p>
+                    <div className="bg-black/40 p-3 rounded-xl break-all text-[8px] font-mono mb-4 max-h-20 overflow-y-auto select-all">{feedbackCode}</div>
+                    <button onClick={() => {navigator.clipboard.writeText(feedbackCode); alert("הקוד הועתק!");}} className="w-full py-3 bg-white text-slate-900 rounded-xl font-bold text-sm">📋 העתק ושלח לסטודנט</button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
+            <div className="bg-white p-10 rounded-[3rem] shadow-2xl">
+              <h2 className="text-2xl font-black mb-6 text-slate-800">🛠️ הגדרת תבנית משימה</h2>
+              <p className="text-slate-500 mb-6 font-medium">כאן תוכלי להגדיר סיטואציה קבועה מראש שתוצג לכל הסטודנטים בפתח המשימה.</p>
               <textarea 
-                className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-sm text-slate-300 focus:outline-none focus:border-blue-500 h-32"
-                placeholder="أضف ملاحظاتك التقويمية هنا..."
+                value={templateText}
+                onChange={(e) => setTemplateText(e.target.value)}
+                className="w-full h-48 p-6 rounded-2xl border-2 border-slate-100 mb-6 outline-none focus:border-blue-500 text-right font-medium"
+                placeholder="למשל: תארו מצב של לחץ לקראת מבחן גדול..."
               ></textarea>
-              <button className="w-full mt-4 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl font-bold text-sm transition-colors">حفظ الملاحظات</button>
+              <button onClick={saveTemplate} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-blue-700 transition-all">
+                שמירת תבנית משימה 💾
+              </button>
+            </div>
+
+            <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col justify-between">
+              <div>
+                <h2 className="text-2xl font-black mb-6 text-slate-800">📦 גיבוי הפרויקט</h2>
+                <p className="text-slate-500 mb-6 font-medium">מומלץ לבצע גיבוי לפני סיום שיחת הצ'אט. הקובץ מכיל את כל המבנה וההגדרות של האפליקציה שלך.</p>
+                <div className="p-6 bg-amber-50 rounded-2xl border-2 border-amber-100 text-amber-800 mb-8">
+                  <p className="text-sm font-bold">💡 טיפ למרצה:</p>
+                  <p className="text-xs">שמרי את הקובץ במקום בטוח. בשיחה הבאה תוכלי לבקש מה-AI "לטעון" את ההגדרות מהקובץ הזה.</p>
+                </div>
+              </div>
+              <button onClick={exportProjectBackup} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-3">
+                <span>📥</span> הורדת גיבוי פרויקט (JSON)
+              </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

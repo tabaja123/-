@@ -1,121 +1,149 @@
 
-import React from 'react';
+import React, { useState } from 'react';
+import { GoogleGenAI, Modality } from "@google/genai";
+import { Language } from '../../types';
+import { translations } from '../../locales';
 
 interface Step34Props {
-  answers: string[]; // ans-6,7,8 (Step 3) OR ans-9,10 (Step 4)
+  answers: string[];
   onAnswerChange: (idx: number, val: string) => void;
   isStep4: boolean;
+  language: Language;
 }
 
-const Step34: React.FC<Step34Props> = ({ answers, onAnswerChange, isStep4 }) => {
-  if (!isStep4) {
-    return (
-      <div className="animate-fade-in space-y-10 text-right">
-        <div className="bg-indigo-600 p-10 rounded-[2.5rem] text-white mb-10 shadow-xl">
-          <h2 className="text-3xl font-black mb-2">المرحلة الثالثة: السلوك والاستجابة (التنظيم وتحقيق الأهداف)</h2>
-          <p className="opacity-80 text-lg italic">تحليل أفعال الاستجابة وتأثيرها على الهدف.</p>
-        </div>
-        
-        <div className="space-y-10">
-          <div className="bg-white p-8 rounded-[2.5rem] border-l-8 border-indigo-400 shadow-lg">
-            <div className="flex justify-between items-center mb-4">
-              <label className="block font-bold text-indigo-900 text-xl">
-                1. فحص التنظيم العاطفي: هل كانت الاستجابة اندفاعية أم متوافقة مع الموقف؟
-              </label>
-              <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">6 درجات</span>
-            </div>
-            <textarea
-              value={answers[0]}
-              onChange={(e) => onAnswerChange(0, e.target.value)}
-              className="w-full h-40 p-5 rounded-2xl border-2 border-slate-100 focus:border-indigo-400 outline-none transition-all shadow-inner text-slate-800"
-              placeholder="اشرح بتفصيل كبير..."
-            ></textarea>
-          </div>
-          
-          <div className="bg-white p-8 rounded-[2.5rem] border-l-8 border-indigo-500 shadow-lg">
-            <div className="flex justify-between items-center mb-4">
-              <label className="block font-bold text-indigo-900 text-xl">
-                2. التقدم نحو الغايات والأهداف: هل قربتك الاستجابة من الهدف أم أبعدتك عنه؟
-              </label>
-              <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">6 درجات</span>
-            </div>
-            <textarea
-              value={answers[1]}
-              onChange={(e) => onAnswerChange(1, e.target.value)}
-              className="w-full h-40 p-5 rounded-2xl border-2 border-slate-100 focus:border-indigo-400 outline-none transition-all shadow-inner text-slate-800"
-              placeholder="كيف أثرت الاستجابة على النتيجة النهائية التي رغبت في تحقيقها؟"
-            ></textarea>
-          </div>
-          
-          <div className="bg-white p-8 rounded-[2.5rem] border-l-8 border-indigo-600 shadow-lg">
-            <div className="flex justify-between items-center mb-4">
-              <label className="block font-bold text-indigo-900 text-xl">
-                3. الشعور بالكفاءة الذاتية: كيف أثر إيمانك بقدرتك على جودة الأداء؟
-              </label>
-              <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">6 درجات</span>
-            </div>
-            <textarea
-              value={answers[2]}
-              onChange={(e) => onAnswerChange(2, e.target.value)}
-              className="w-full h-40 p-5 rounded-2xl border-2 border-slate-100 focus:border-indigo-400 outline-none transition-all shadow-inner text-slate-800"
-              placeholder="كيف أثر مستوى ثقتك في المهمة على الأداء الفعلي؟"
-            ></textarea>
-          </div>
-        </div>
-      </div>
-    );
-  }
+const Step34: React.FC<Step34Props> = ({ answers, onAnswerChange, isStep4, language }) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isResponseBankOpen, setIsResponseBankOpen] = useState(false);
+  const t = translations[language];
+
+  const playAudioMediation = async () => {
+    if (isSpeaking) return;
+    setIsSpeaking(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: isStep4 ? t.step4_tts : t.step3_tts }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: t.voice } } },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const decode = (base64: string) => {
+          const b = atob(base64);
+          const bytes = new Uint8Array(b.length);
+          for (let i = 0; i < b.length; i++) bytes[i] = b.charCodeAt(i);
+          return bytes;
+        };
+        const buffer = audioContext.createBuffer(1, decode(base64Audio).length / 2, 24000);
+        const dataInt16 = new Int16Array(decode(base64Audio).buffer);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.onended = () => setIsSpeaking(false);
+        source.start();
+      }
+    } catch (e) { setIsSpeaking(false); }
+  };
+
+  const regulatedExamples = [t.resp_reg_1, t.resp_reg_2, t.resp_reg_3, t.resp_reg_4];
+  const impulsiveExamples = [t.resp_imp_1, t.resp_imp_2, t.resp_imp_3, t.resp_imp_4];
+
+  const addToResponse = (text: string) => {
+    const current = answers[0] || '';
+    const updated = current.length > 0 ? `${current}, ${text}` : text;
+    onAnswerChange(0, updated);
+  };
 
   return (
-    <div className="animate-fade-in space-y-10 text-right">
-      <div className="bg-slate-800 p-10 rounded-[2.5rem] text-white mb-10 shadow-2xl">
-        <h2 className="text-3xl font-black mb-2">المرحلة الرابعة: التعلم وتحليل آليات التنظيم</h2>
-        <p className="opacity-80 text-lg italic text-center">فهم ديناميكية حلقة النجاح مقابل حلقة الفشل.</p>
-      </div>
-
-      <div className="bg-white p-12 rounded-[3.5rem] border shadow-2xl mb-12 text-center relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-3 bg-gradient-to-r from-emerald-400 via-blue-500 to-indigo-600"></div>
-        <h3 className="text-3xl font-black text-slate-800 mb-10 tracking-tight uppercase underline decoration-blue-500 decoration-4 underline-offset-8">كيف نكسر الحلقة السلبية؟</h3>
-        <div className="flex flex-col md:flex-row justify-center items-center gap-8">
-          <div className="bg-emerald-500 text-white px-8 py-5 rounded-[1.5rem] shadow-xl font-bold border-2 border-emerald-600 text-sm">الشعور بالكفاءة الذاتية</div>
-          <div className="text-5xl text-slate-300 transform rotate-90 md:rotate-0">➜</div>
-          <div className="bg-blue-500 text-white px-8 py-5 rounded-[1.5rem] shadow-xl font-bold border-2 border-blue-600 text-sm">الإنجازات والأداء العالي</div>
-          <div className="text-5xl text-slate-300 transform rotate-90 md:rotate-0">➜</div>
-          <div className="bg-indigo-600 text-white px-8 py-5 rounded-[1.5rem] shadow-xl font-bold border-2 border-indigo-700 text-sm">النمو وتطوير التنظيم</div>
+    <div className="animate-fade-in space-y-12 text-right">
+      <div className={`p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 border-b-8 ${isStep4 ? 'bg-emerald-800 border-emerald-600' : 'bg-blue-900 border-blue-600'} text-white`}>
+        <div className="flex items-center gap-5 text-right flex-grow">
+          <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center text-4xl">{isStep4 ? '📊' : '⚙️'}</div>
+          <div className="flex-grow">
+            <h3 className="text-2xl font-black mb-1">{isStep4 ? t.step4_name : t.step3_name}</h3>
+            <p className="text-blue-100 mb-4">{isStep4 ? t.step4_instr : t.step3_instr}</p>
+            <button onClick={playAudioMediation} disabled={isSpeaking} className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-black shadow-lg transition active:scale-95">
+              {isSpeaking ? t.reading : t.listenInstructions}
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="space-y-10">
-        <div className="bg-rose-50 p-8 rounded-[2.5rem] border-t-8 border-rose-500 shadow-xl">
-          <div className="flex justify-between items-center mb-6">
-            <label className="block font-bold text-slate-800 text-2xl italic">
-              1. تحليل الحلقة: هل تطور الحدث إلى حلقة نجاح أم حلقة فشل؟ اشرح لماذا.
-            </label>
-            <span className="bg-rose-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">6 درجات</span>
+      {!isStep4 ? (
+        <section className="bg-white p-10 rounded-[3rem] border-2 border-slate-50 shadow-lg">
+          <div className="flex justify-between items-center mb-8">
+            <div className="flex items-center gap-3">
+              <h4 className="text-2xl font-black text-slate-800">{t.responseBankTitle}:</h4>
+              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-black">10 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+            </div>
+            <button onClick={() => setIsResponseBankOpen(!isResponseBankOpen)} className="bg-blue-50 text-blue-700 px-8 py-3 rounded-2xl font-black border-2 border-blue-100 hover:bg-blue-100 transition-all">
+              {isResponseBankOpen ? t.close : t.open_bank}
+            </button>
           </div>
-          <textarea
-            value={answers[3]}
-            onChange={(e) => onAnswerChange(3, e.target.value)}
-            className="w-full h-48 p-6 rounded-2xl border-2 border-slate-100 focus:border-rose-400 outline-none transition-all shadow-inner text-slate-800"
-            placeholder="اشرح بتفصيل عميق..."
-          ></textarea>
-        </div>
-        
-        <div className="bg-amber-50 p-8 rounded-[2.5rem] border-t-8 border-amber-500 shadow-xl">
-          <div className="flex justify-between items-center mb-6">
-            <label className="block font-bold text-slate-800 text-2xl italic">
-              2. مراحل التنظيم: أين حددت صعوبة مركزية - في التخطيط، في المراقبة أم في التقييم؟
-            </label>
-            <span className="bg-amber-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">6 درجات</span>
+          {isResponseBankOpen && (
+            <div className="grid md:grid-cols-2 gap-8 mb-10 animate-fade-in">
+              <div className="bg-emerald-50/50 p-6 rounded-[2.5rem] border-2 border-emerald-100">
+                <h5 className="font-black text-emerald-800 mb-4 flex items-center gap-2">🌱 {t.resp_regulated_title}</h5>
+                <div className="space-y-3">
+                  {regulatedExamples.map((ex, i) => (
+                    <button key={i} onClick={() => addToResponse(ex)} className="w-full text-right p-3 bg-white border-2 border-emerald-200 rounded-xl text-sm font-bold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm">+ {ex}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-rose-50/50 p-6 rounded-[2.5rem] border-2 border-rose-100">
+                <h5 className="font-black text-rose-800 mb-4 flex items-center gap-2">⚡ {t.resp_impulsive_title}</h5>
+                <div className="space-y-3">
+                  {impulsiveExamples.map((ex, i) => (
+                    <button key={i} onClick={() => addToResponse(ex)} className="w-full text-right p-3 bg-white border-2 border-rose-200 rounded-xl text-sm font-bold text-rose-700 hover:bg-rose-600 hover:text-white transition-all shadow-sm">+ {ex}</button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          <label className="block font-black text-slate-700 mb-3 text-xl">{t.label_response}</label>
+          <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-44 p-6 rounded-3xl border-2 outline-none text-right focus:border-blue-500 shadow-inner bg-slate-50/30" placeholder={t.describeCase}></textarea>
+        </section>
+      ) : (
+        <div className="space-y-12">
+          <section className="bg-white p-12 rounded-[3.5rem] border-4 border-slate-100 shadow-2xl flex flex-col items-center">
+             <div className="relative w-full max-w-md aspect-square flex items-center justify-center">
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-8 py-4 rounded-xl font-black text-xl shadow-lg z-10">{(t as any).cycle_efficacy}</div>
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 bg-indigo-400 text-white px-8 py-4 rounded-xl font-black text-xl shadow-lg z-10">{(t as any).cycle_performance}</div>
+                <div className="absolute bottom-0 left-0 bg-blue-500 text-white px-8 py-4 rounded-xl font-black text-xl shadow-lg z-10">{(t as any).cycle_achievements}</div>
+                <div className="absolute inset-10 flex items-center justify-center">
+                   <svg viewBox="0 0 100 100" className="w-full h-full text-rose-500 fill-current opacity-80"><path d="M 50,10 A 40,40 0 1,1 10,50" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round" /><polygon points="10,50 0,40 20,40" /></svg>
+                </div>
+             </div>
+             <p className="mt-12 text-center text-slate-600 font-bold max-w-lg mx-auto leading-relaxed">
+                {(language === 'ar' ? 'تفاعل هذه العناصر يخلق حلقة تغذية راجعة تقوي مهارات التنظيم الذاتي لديك.' : 'הקשר בין המרכיבים הללו יוצר לולאת משוב שמחזקת את יכולת הוויסות העצמי שלך.')}
+             </p>
+          </section>
+
+          <div className="bg-white p-10 rounded-[3rem] border-r-8 border-emerald-500 shadow-xl space-y-10">
+            <div>
+              <div className="flex justify-between items-center mb-4">
+                <label className="block font-black text-slate-800 text-xl">{t.label_evaluation}</label>
+                <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-black">7 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+              </div>
+              <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-44 p-6 rounded-3xl border-2 outline-none text-right focus:border-emerald-500 shadow-inner bg-slate-50/30" placeholder={t.describeCase}></textarea>
+            </div>
+            <div className="pt-8 border-t-2 border-slate-50">
+              <div className="flex justify-between items-center mb-4">
+                <label className="block font-black text-slate-800 text-xl">{(t as any).label_efficacy_analysis}</label>
+                <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-black">8 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+              </div>
+              <textarea value={answers[2]} onChange={(e) => onAnswerChange(2, e.target.value)} className="w-full h-44 p-6 rounded-3xl border-2 outline-none text-right focus:border-blue-500 shadow-inner bg-blue-50/30" placeholder={t.describeCase}></textarea>
+            </div>
           </div>
-          <textarea
-            value={answers[4]}
-            onChange={(e) => onAnswerChange(4, e.target.value)}
-            className="w-full h-48 p-6 rounded-2xl border-2 border-slate-100 focus:border-amber-400 outline-none transition-all shadow-inner text-slate-800"
-            placeholder="اشرح بتفصيل عميق..."
-          ></textarea>
         </div>
-      </div>
+      )}
     </div>
   );
 };

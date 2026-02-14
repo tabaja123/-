@@ -1,136 +1,177 @@
 
 import React, { useState } from 'react';
-import { AppState } from '../../types';
+import { AppState, Language } from '../../types';
+import { GoogleGenAI, Modality } from "@google/genai";
+import { translations } from '../../locales';
 
 interface Step6Props {
   state: AppState;
-  answers: string[]; // ans-16, 17, 18
+  answers: string[];
   onAnswerChange: (idx: number, val: string) => void;
   isSubmitted: boolean;
   onUpdate: (updates: any) => void;
   studentName: string;
+  language: Language;
 }
 
-const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitted, onUpdate, studentName }) => {
-  const [showConfetti, setShowConfetti] = useState(false);
+const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitted, onUpdate, studentName, language }) => {
   const [submissionCode, setSubmissionCode] = useState('');
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isTimingGuideOpen, setIsTimingGuideOpen] = useState(true);
+  const t = translations[language];
+
+  const playAudioMediation = async () => {
+    if (isSpeaking) return;
+    setIsSpeaking(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) });
+      const prompt = t.step6_tts;
+      
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: prompt }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: t.voice } } },
+        },
+      });
+
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const decode = (base64: string) => {
+          const b = atob(base64);
+          const bytes = new Uint8Array(b.length);
+          for (let i = 0; i < b.length; i++) bytes[i] = b.charCodeAt(i);
+          return bytes;
+        };
+        const buffer = audioContext.createBuffer(1, decode(base64Audio).length / 2, 24000);
+        const dataInt16 = new Int16Array(decode(base64Audio).buffer);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.onended = () => setIsSpeaking(false);
+        source.start();
+      }
+    } catch (e) { setIsSpeaking(false); }
+  };
+
+  const safeBtoa = (str: string) => {
+    try {
+      return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => {
+        return String.fromCharCode(parseInt(p1, 16));
+      }));
+    } catch (e) { return "error"; }
+  };
 
   const handleSubmit = (e: React.MouseEvent) => {
     e.preventDefault();
-    const code = btoa(JSON.stringify(state));
+    const code = safeBtoa(JSON.stringify(state));
     setSubmissionCode(code);
     onUpdate({ isSubmitted: true });
-    setShowConfetti(true);
-    setTimeout(() => setShowConfetti(false), 5000);
-  };
-
-  const copyToClipboard = () => {
-    navigator.clipboard.writeText(submissionCode);
-    alert("تم نسخ الكود بنجاح! يرجى إرساله للمحاضر الآن.");
   };
 
   if (isSubmitted) {
     return (
-      <div className="animate-fade-in py-16 px-12 bg-white rounded-[3.5rem] border-2 border-emerald-100 shadow-2xl max-w-2xl mx-auto w-full text-center">
-        <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 text-4xl font-bold shadow-inner">
-          ✓
-        </div>
-        <h3 className="text-4xl font-black text-slate-900 mb-6">تم إعداد مهمتك بنجاح!</h3>
-        <p className="text-slate-500 text-xl font-light mb-10">
-          لقد اكتملت جميع المراحل. للحصول على الدرجة، يجب نسخ "كود التسليم" أدناه وإرساله للمحاضر عبر المنصة التعليمية المخصصة.
-        </p>
-
-        <div className="bg-slate-50 p-6 rounded-2xl mb-8 border-2 border-dashed border-slate-200">
-          <p className="text-xs font-black text-slate-400 uppercase mb-2 tracking-widest">كود التسليم الخاص بك:</p>
-          <div className="break-all text-[10px] text-slate-600 bg-white p-4 rounded-xl border mb-4 font-mono overflow-y-auto max-h-32">
-            {submissionCode}
-          </div>
-          <button 
-            onClick={copyToClipboard}
-            className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-black transition"
-          >
-            📋 نسخ الكود للإرسال
+      <div className="animate-fade-in py-16 px-6 bg-white rounded-[3.5rem] border-4 border-emerald-100 shadow-2xl max-w-2xl mx-auto w-full text-center text-right" dir="rtl">
+        <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 text-5xl font-bold">✓</div>
+        <h3 className="text-3xl font-black text-slate-900 mb-4">{t.successCode}</h3>
+        <p className="text-slate-500 text-lg mb-10">{language === 'ar' ? 'قم بنسخ هذا الكود وإرساله للمحاضر.' : 'העתיקו את הקוד הבא ושלחו אותו למרצה.'}</p>
+        <div className="bg-slate-50 p-8 rounded-[2rem] mb-8 border-4 border-dashed border-slate-200">
+          <div className="break-all text-[10px] bg-white p-5 rounded-2xl border mb-6 font-mono max-h-32 overflow-y-auto text-left" dir="ltr">{submissionCode}</div>
+          <button onClick={() => {navigator.clipboard.writeText(submissionCode); alert(language === 'ar' ? "تم النسخ!" : "הקוד הועתק!");}} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black text-xl hover:bg-black transition-all shadow-xl">
+            📋 {t.copyCode}
           </button>
         </div>
-
-        <button 
-          type="button"
-          onClick={() => onUpdate({ isSubmitted: false })}
-          className="text-slate-400 font-bold hover:text-slate-600 transition underline underline-offset-4"
-        >
-          العودة لتعديل الإجابات
-        </button>
       </div>
     );
   }
 
   return (
-    <div className="animate-fade-in space-y-10 text-right">
-      <div className="bg-slate-900 p-10 rounded-[3rem] text-white shadow-2xl">
-        <h2 className="text-3xl font-black mb-4 tracking-tight">المرحلة السادسة: خطة عمل للمستقبل</h2>
-        <p className="text-slate-400 font-semibold italic">ابنِ خوارزمية النجاح الشخصية الخاصة بك للموقف القادم.</p>
+    <div className="animate-fade-in space-y-12 text-right">
+      <div className="bg-slate-900 text-white p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 border-b-8 border-slate-700">
+        <div className="flex items-center gap-5 text-right">
+          <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center text-4xl">🚀</div>
+          <div className="flex-grow">
+            <h3 className="text-2xl font-black mb-1">{t.step6_name}</h3>
+            <p className="text-slate-400 mb-4">{t.step6_instr}</p>
+            <button onClick={playAudioMediation} disabled={isSpeaking} className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black shadow-xl transition active:scale-95 disabled:opacity-50">
+              {isSpeaking ? t.reading : t.listenInstructions}
+            </button>
+          </div>
+        </div>
       </div>
 
-      <div className="bg-white p-10 rounded-[3.5rem] border-2 border-slate-50 shadow-2xl space-y-10">
+      {/* Timing & Usage Guide Section - Moved from Step 4 */}
+      <section className="bg-white p-10 rounded-[3rem] border-2 border-amber-100 shadow-xl overflow-hidden relative">
+        <div className="flex justify-between items-center mb-8">
+          <h4 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+            <span className="bg-amber-100 p-2 rounded-xl text-amber-600">💡</span>
+            {t.timing_guide_title}
+          </h4>
+          <button onClick={() => setIsTimingGuideOpen(!isTimingGuideOpen)} className="bg-amber-50 text-amber-700 px-6 py-2 rounded-xl font-bold border border-amber-200">
+            {isTimingGuideOpen ? t.close : t.open_bank}
+          </button>
+        </div>
+
+        {isTimingGuideOpen && (
+          <div className="grid md:grid-cols-3 gap-6 animate-fade-in">
+            <div className="bg-sky-50 p-6 rounded-[2rem] border-2 border-sky-100 transition-all hover:scale-105">
+              <div className="text-3xl mb-3">🕒</div>
+              <h5 className="font-black text-sky-900 mb-2">{t.timing_before_title}</h5>
+              <p className="text-xs text-sky-800 leading-relaxed font-medium">{t.timing_before_desc}</p>
+            </div>
+            <div className="bg-orange-50 p-6 rounded-[2rem] border-2 border-orange-100 transition-all hover:scale-105">
+              <div className="text-3xl mb-3">🔥</div>
+              <h5 className="font-black text-orange-900 mb-2">{t.timing_during_title}</h5>
+              <p className="text-xs text-orange-800 leading-relaxed font-medium">{t.timing_during_desc}</p>
+            </div>
+            <div className="bg-emerald-50 p-6 rounded-[2rem] border-2 border-emerald-100 transition-all hover:scale-105">
+              <div className="text-3xl mb-3">📖</div>
+              <h5 className="font-black text-emerald-900 mb-2">{t.timing_after_title}</h5>
+              <p className="text-xs text-emerald-800 leading-relaxed font-medium">{t.timing_after_desc}</p>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <div className="bg-white p-10 rounded-[3rem] border-2 border-slate-100 shadow-xl space-y-10">
         <div className="space-y-8">
           <div className="bg-slate-50 p-8 rounded-[2rem] border-r-8 border-slate-800 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-              <label htmlFor="ans-16" className="block font-bold text-xl text-slate-800">1. التعرف المبكر والوقاية:</label>
-              <span className="bg-slate-800 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">5 درجات</span>
+            <div className="flex justify-between items-center mb-4">
+              <label className="block font-black text-xl text-slate-800">{t.label_warning}</label>
+              <span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-black">5 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
             </div>
-            <textarea
-              id="ans-16"
-              value={answers[0]}
-              onChange={(e) => onAnswerChange(0, e.target.value)}
-              className="w-full h-32 p-5 rounded-2xl border-2 border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition-all shadow-inner bg-white text-slate-800"
-              placeholder="صف هنا علامات التعرف المبكر..."
-            ></textarea>
+            <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-32 p-5 rounded-2xl outline-none text-right bg-white border-2 border-transparent focus:border-blue-500 transition-all shadow-sm" placeholder={t.placeholder_step6}></textarea>
           </div>
-
           <div className="bg-slate-50 p-8 rounded-[2rem] border-r-8 border-slate-800 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-              <label htmlFor="ans-17" className="block font-bold text-xl text-slate-800">2. اختيار الأدوات والخطوة الأولى:</label>
-              <span className="bg-slate-800 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">5 درجات</span>
+            <div className="flex justify-between items-center mb-4">
+              <label className="block font-black text-xl text-slate-800">{t.label_firstStep}</label>
+              <span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-black">5 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
             </div>
-            <textarea
-              id="ans-17"
-              value={answers[1]}
-              onChange={(e) => onAnswerChange(1, e.target.value)}
-              className="w-full h-32 p-5 rounded-2xl border-2 border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition-all shadow-inner bg-white text-slate-800"
-              placeholder="ماذا ستكون خطوتك الأولى؟"
-            ></textarea>
+            <textarea value={answers[1]} onChange={(e) => onAnswerChange(1, e.target.value)} className="w-full h-32 p-5 rounded-2xl outline-none text-right bg-white border-2 border-transparent focus:border-blue-500 transition-all shadow-sm" placeholder={t.placeholder_step6}></textarea>
           </div>
-
           <div className="bg-slate-50 p-8 rounded-[2rem] border-r-8 border-slate-800 shadow-sm">
-            <div className="flex justify-between items-center mb-3">
-              <label htmlFor="ans-18" className="block font-bold text-xl text-slate-800">3. إشباع الاحتياجات وفحص التقدم:</label>
-              <span className="bg-slate-800 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">5 درجات</span>
+            <div className="flex justify-between items-center mb-4">
+              <label className="block font-black text-xl text-slate-800">{t.label_maintenance}</label>
+              <span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-full text-xs font-black">5 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
             </div>
-            <textarea
-              id="ans-18"
-              value={answers[2]}
-              onChange={(e) => onAnswerChange(2, e.target.value)}
-              className="w-full h-32 p-5 rounded-2xl border-2 border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 outline-none transition-all shadow-inner bg-white text-slate-800"
-              placeholder="كيف ستحافظ على الشعور بالكفاءة؟"
-            ></textarea>
+            <textarea value={answers[2]} onChange={(e) => onAnswerChange(2, e.target.value)} className="w-full h-32 p-5 rounded-2xl outline-none text-right bg-white border-2 border-transparent focus:border-blue-500 transition-all shadow-sm" placeholder={t.placeholder_step6}></textarea>
+          </div>
+          <div className="bg-slate-50 p-8 rounded-[2rem] border-r-8 border-blue-600 shadow-sm">
+            <div className="flex justify-between items-center mb-4">
+              <label className="block font-black text-xl text-slate-800">{t.label_doDifferently}</label>
+              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black">5 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+            </div>
+            <textarea value={answers[3]} onChange={(e) => onAnswerChange(3, e.target.value)} className="w-full h-32 p-5 rounded-2xl outline-none text-right bg-white border-2 border-transparent focus:border-blue-500 transition-all shadow-sm" placeholder={t.placeholder_step6}></textarea>
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={handleSubmit}
-          className="w-full py-6 bg-emerald-600 text-white rounded-[2.5rem] font-black text-2xl hover:bg-emerald-700 shadow-2xl transition-all transform hover:-translate-y-1 active:scale-95 flex items-center justify-center gap-3 group"
-        >
-          <span className="group-hover:scale-125 transition-transform">📮</span>
-          تجهيز المهمة للتسليم
+        <button onClick={handleSubmit} className="w-full py-6 bg-blue-600 text-white rounded-[2.5rem] font-black text-2xl hover:bg-blue-700 shadow-2xl transition-all active:scale-95">
+          📮 {t.finishBtn}
         </button>
       </div>
-
-      {showConfetti && (
-        <div className="fixed inset-0 pointer-events-none z-[200] flex items-center justify-center text-8xl animate-bounce">
-          🎉✨🎊
-        </div>
-      )}
     </div>
   );
 };

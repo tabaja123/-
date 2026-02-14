@@ -1,7 +1,10 @@
 
+export type Language = 'ar' | 'he';
+
 export interface StudentData {
   fullName: string;
   studentId: string;
+  email: string;
 }
 
 export interface EmotionSelection {
@@ -15,15 +18,23 @@ export interface ThoughtPair {
   alternative: string;
 }
 
+export interface FeedbackData {
+  finalGrade: number;
+  comments: string;
+  teacherName: string;
+  timestamp: string;
+}
+
 export interface AppState {
   step: number;
+  language: Language;
   student: StudentData;
   emotions: EmotionSelection[];
-  // answers maps to ans-1 through ans-18 in the reference source
   answers: string[];
   reframing: ThoughtPair[];
   selectedTools: string[];
   isSubmitted: boolean;
+  feedback?: FeedbackData;
 }
 
 export interface EmotionDefinition {

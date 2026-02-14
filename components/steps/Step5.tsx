@@ -1,152 +1,136 @@
 
 import React, { useState } from 'react';
-import { ThoughtPair } from '../../types';
-import { TOOL_BANKS } from '../../constants';
+import { ThoughtPair, Language } from '../../types';
+import { GoogleGenAI, Modality } from "@google/genai";
+import { translations } from '../../locales';
 
 interface Step5Props {
   reframing: ThoughtPair[];
   selectedTools: string[];
-  answers: string[]; // ans-11, 12, 13, 14, 15
+  answers: string[];
   onAnswerChange: (idx: number, val: string) => void;
   onUpdate: (updates: any) => void;
+  language: Language;
 }
 
 const TOOL_ICONS: Record<string, string> = {
-  'التنفس العميق': '🌬️',
-  'نموذج أفرات (EFRAT)': '🔄',
-  'الحديث الذاتي المشجع': '🗣️',
-  'اليقظة الذهنية (Mindfulness)': '🧘',
-  'تقنيات التثبيت (5-4-3-2-1)': '⚓',
-  'تقنية بومودورو': '🍅',
-  'مصفوفة آيزنهاور': '⊞',
-  'الجدول الزمني الرقمي': '📅',
-  'تجزئة المهام (Chunking)': '🧱',
-  'تحديد الأولويات': '🎯',
-  'تحديد أهداف SMART': '📏',
-  'الاتصال بالقيم الجوهرية': '💎',
-  'تحليل الربح والخسارة': '⚖️',
-  'تخيل النجاح': '🌈',
-  'وضع الحدود': '🚧',
-  'ورقة متابعة الأداء': '📈',
-  'التأمل اليومي': '🧘‍♂️',
-  'استراتيجية التغذية الذاتية': '🔋',
-  'طلب التغذية الراجعة': '📨',
-  'استخلاص الدروس': '🧠'
+  'التنفس العميق': '🌬️', 'نموذج أفرات (EFRAT)': '🔄', 'الحديث الذاتي المشجع': '🗣️',
+  'اليقظة الذهنية (Mindfulness)': '🧘', 'تقنيات التثبيت (5-4-3-2-1)': '⚓',
+  'تقنية بومودورو': '🍅', 'مصفوفة آيزنهاور': '⊞', 'الجدول الزمني الرقمي': '📅',
+  'تجزئة المهام (Chunking)': '🧱', 'تحديد الأولويات': '🎯', 'تحديد أهداف SMART': '🎯',
+  'الاتصال بالقيم الجوهرية': '💎', 'تحليل الربح والخسارة': '⚖️', 'تخيل النجاح': '🌈',
+  'وضع الحدود': '🚧', 'ورقة متابعة الأداء': '📝', 'التأمل اليومي': '🕯️',
+  'استراتيجية التغذية الذاتية': '🍎', 'طلب التغذية الراجعة': '💬', 'استخلاص الدروس': '📖',
+  'נשימות עמוקות': '🌬️', 'מודל אפר"ת': '🔄', 'דיבור עצמי מעודד': '🗣️',
+  'מיינדפולנס': '🧘', 'טכניקות קרקוע': '⚓', 'שיטת פומודורו': '🍅',
+  'מטריצת אייזנהאור': '⊞', 'לו"ז דיגיטלי': '📅', 'פירוק משימות': '🧱',
+  'תיעדוף משימות': '🎯', 'יעדי SMART': '🎯', 'חיבור לערכים': '💎',
+  'ניתוח רווח והפסד': '⚖️', 'דמיון מודרך להצלחה': '🌈', 'הצבת גבולות': '🚧',
+  'דף מעקב ביצועים': '📝', 'רפלקציה יומית': '🕯️', 'הזנה עצמית': '🍎',
+  'בקשת משוב': '💬', 'הפקת לקחים': '📖'
 };
 
-const Step5: React.FC<Step5Props> = ({ reframing, selectedTools, answers, onAnswerChange, onUpdate }) => {
+const Step5: React.FC<Step5Props> = ({ selectedTools, answers, onAnswerChange, onUpdate, language }) => {
   const [isThoughtBankOpen, setIsThoughtBankOpen] = useState(false);
+  const [isStylesBankOpen, setIsStylesBankOpen] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const t = translations[language] as any;
 
-  const toggleTool = (tool: string) => {
-    if (selectedTools.includes(tool)) {
-      onUpdate({ selectedTools: selectedTools.filter(t => t !== tool) });
-    } else {
-      onUpdate({ selectedTools: [...selectedTools, tool] });
-    }
+  const playAudioMediation = async () => {
+    if (isSpeaking) return;
+    setIsSpeaking(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: t.step5_tts }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: t.voice } } },
+        },
+      });
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const decode = (base64: string) => {
+          const b = atob(base64);
+          const bytes = new Uint8Array(b.length);
+          for (let i = 0; i < b.length; i++) bytes[i] = b.charCodeAt(i);
+          return bytes;
+        };
+        const buffer = audioContext.createBuffer(1, decode(base64Audio).length / 2, 24000);
+        const dataInt16 = new Int16Array(decode(base64Audio).buffer);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.onended = () => setIsSpeaking(false);
+        source.start();
+      }
+    } catch (e) { setIsSpeaking(false); }
   };
 
-  const getToolIcon = (tool: string) => TOOL_ICONS[tool] || '🔧';
+  const toggleTool = (tool: string) => {
+    if (selectedTools.includes(tool)) onUpdate({ selectedTools: selectedTools.filter(t => t !== tool) });
+    else onUpdate({ selectedTools: [...selectedTools, tool] });
+  };
+
+  const thinkingStyles = [t.thought_all_nothing || t.style_all_nothing, t.thought_overgen || t.style_overgen, t.thought_catastro || t.style_catastro, t.thought_labeling || t.style_labeling, t.thought_mindreading || t.style_mindreading];
 
   return (
     <div className="space-y-12 animate-fade-in text-right">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-700 p-10 rounded-[2.5rem] text-white shadow-xl">
-        <h2 className="text-3xl font-black">المرحلة الخامسة: حقيبة الأدوات للطالب المنظم ذاتياً</h2>
-        <p className="opacity-80 italic mt-2">اختيار أدوات عملية وتصميم أفكار محفزة.</p>
+      <div className="bg-teal-900 text-white p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 border-b-8 border-teal-700">
+        <div className="flex items-center gap-5">
+          <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center text-4xl">🎙️</div>
+          <div className="flex-grow">
+            <h3 className="text-2xl font-black mb-1">{t.step5_name}</h3>
+            <p className="text-teal-200 mb-4">{t.step5_instr}</p>
+            <button onClick={playAudioMediation} disabled={isSpeaking} className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black shadow-xl transition active:scale-95 disabled:opacity-50">{isSpeaking ? t.reading : t.listenInstructions}</button>
+          </div>
+        </div>
       </div>
 
-      <section className="bg-amber-50 p-8 rounded-[3rem] border-2 border-amber-200 shadow-md">
-        <div className="flex justify-between items-center mb-6">
+      <section className="bg-amber-50 p-10 rounded-[3rem] border-4 border-amber-100 shadow-md">
+        <div className="flex justify-between items-center mb-8">
           <div className="flex items-center gap-3">
-            <h3 className="text-2xl font-black text-amber-900 flex items-center gap-2">
-              <span>🧠</span> 1. بنك الأفكار: التحويل للتنظيم (10 أزواج)
-            </h3>
-            <span className="bg-amber-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">3 درجات</span>
+            <h3 className="text-3xl font-black text-amber-900">🧠 1. {t.reframingTitle}</h3>
+            <span className="bg-amber-200 text-amber-800 px-3 py-1 rounded-full text-sm font-black">4 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
           </div>
-          <button 
-            onClick={() => setIsThoughtBankOpen(!isThoughtBankOpen)}
-            className="bg-amber-600 text-white px-6 py-2 rounded-2xl font-bold shadow-md hover:bg-amber-700 transition"
-          >
-            {isThoughtBankOpen ? 'إخفاء الأمثلة' : 'عرض الأمثلة الكاملة'}
-          </button>
+          <div className="flex gap-3">
+            <button onClick={() => setIsStylesBankOpen(!isStylesBankOpen)} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg text-sm">{isStylesBankOpen ? t.close : t.thinkingStylesBank}</button>
+            <button onClick={() => setIsThoughtBankOpen(!isThoughtBankOpen)} className="bg-amber-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg text-sm">{isThoughtBankOpen ? t.close : (language === 'ar' ? 'أمثلة' : 'דוגמאות')}</button>
+          </div>
         </div>
-
         {isThoughtBankOpen && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8 animate-fade-in text-sm leading-relaxed">
-            {reframing.map((pair, idx) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            {t.thought_pairs.map((pair: ThoughtPair, idx: number) => (
               <React.Fragment key={idx}>
-                <div className="bg-white p-4 rounded-2xl border border-red-200 shadow-sm">
-                  <span className="text-red-600 font-bold block mb-1">❌ "{pair.original}"</span>
-                  <span className="text-slate-500 italic">فكرة تلقائية/مشحونة</span>
-                </div>
-                <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-sm">
-                  <span className="text-emerald-600 font-bold block mb-1">✅ "{pair.alternative}"</span>
-                  <span className="text-slate-500 italic">فكرة منظمة/محفزة</span>
-                </div>
+                <div className="bg-white p-5 rounded-2xl border-2 border-red-50 font-bold text-red-600 shadow-sm">❌ {pair.original}</div>
+                <div className="bg-white p-5 rounded-2xl border-2 border-emerald-50 font-bold text-emerald-600 shadow-sm">✅ {pair.alternative}</div>
               </React.Fragment>
             ))}
           </div>
         )}
-
-        <div className="space-y-4">
-          <p className="text-amber-800 font-semibold bg-white/50 p-4 rounded-xl border border-amber-100">
-            استخدم الأمثلة أعلاه وقم بتحويل الأفكار الشخصية التي راودتك في الحدث إلى أفكار منظمة ومحفزة:
-          </p>
-          <textarea
-            value={answers[0]}
-            onChange={(e) => onAnswerChange(0, e.target.value)}
-            className="w-full h-40 p-5 rounded-2xl border-2 border-amber-200 focus:border-amber-500 outline-none transition-all shadow-inner bg-white text-slate-800"
-            placeholder="قم بتحويل أفكارك هنا بالتفصيل..."
-          ></textarea>
-        </div>
+        <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-44 p-6 rounded-3xl border-2 outline-none text-right shadow-inner bg-white/50 font-medium focus:border-amber-400" placeholder={t.placeholder_step5}></textarea>
       </section>
 
-      <section className="space-y-8">
-        <div className="flex items-center gap-3 px-4 mb-8">
-          <h3 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-            <span className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg">🛠️</span>
-            2. اختيار أدوات من البنوك الأربعة
-          </h3>
-          <span className="bg-indigo-600 text-white px-3 py-1 rounded-lg text-xs font-black shadow-md shrink-0">5 درجات للاختيار</span>
-        </div>
-
-        <div className="grid md:grid-cols-2 gap-8">
-          {TOOL_BANKS.map((bank, bIdx) => (
-            <div key={bIdx} className={`p-8 rounded-[2.5rem] border-2 shadow-md transition-all ${
-              bIdx === 0 ? 'bg-blue-50 border-blue-100' : 
-              bIdx === 1 ? 'bg-indigo-50 border-indigo-100' :
-              bIdx === 2 ? 'bg-emerald-50 border-emerald-100' :
-              'bg-purple-50 border-purple-100'
-            }`}>
-              <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-200">
-                <h4 className="font-bold text-slate-800 text-xl">{bank.title}</h4>
-                <span className="bg-slate-800 text-white px-2 py-0.5 rounded-lg text-[10px] font-black shadow-sm shrink-0">3 درجات</span>
-              </div>
-              <div className="flex flex-wrap gap-2 mb-6">
-                {bank.tools.map((tool, tIdx) => (
-                  <button
-                    key={tIdx}
-                    onClick={() => toggleTool(tool)}
-                    className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2 ${
-                      selectedTools.includes(tool)
-                        ? 'bg-slate-800 text-white shadow-lg scale-105'
-                        : 'bg-white text-slate-600 border border-slate-200 hover:border-indigo-400 hover:shadow-sm'
-                    }`}
-                  >
-                    <span className="text-lg">{getToolIcon(tool)}</span>
-                    {tool}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={answers[bIdx + 1]}
-                onChange={(e) => onAnswerChange(bIdx + 1, e.target.value)}
-                className="w-full h-32 p-4 rounded-xl border-none shadow-inner focus:ring-2 focus:ring-indigo-300 outline-none bg-white/50"
-                placeholder={`تفصيل استخدام الأدوات من فئة ${bank.title.split(' (')[0]}...`}
-              ></textarea>
+      <div className="grid md:grid-cols-2 gap-8">
+        {t.tool_banks.map((bank: any, bIdx: number) => (
+          <div key={bIdx} className="p-10 rounded-[3rem] bg-slate-50 border-2 border-slate-100 shadow-lg hover:shadow-xl transition-shadow">
+            <div className="flex justify-between items-center mb-6 border-b-4 border-blue-100 pb-2">
+              <h4 className="font-black text-slate-800 text-xl">{bank.title}</h4>
+              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black">4 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
             </div>
-          ))}
-        </div>
-      </section>
+            <div className="flex flex-wrap gap-3 mb-8">
+              {bank.tools.map((tool: string, tIdx: number) => (
+                <button key={tIdx} onClick={() => toggleTool(tool)} className={`px-5 py-3 rounded-2xl text-sm font-black flex items-center gap-3 transition-all ${selectedTools.includes(tool) ? 'bg-slate-800 text-white scale-105 shadow-xl' : 'bg-white border-2 hover:bg-slate-100'}`}><span className="text-2xl">{TOOL_ICONS[tool] || '🔧'}</span><span>{tool}</span></button>
+              ))}
+            </div>
+            <textarea value={answers[bIdx + 1]} onChange={(e) => onAnswerChange(bIdx + 1, e.target.value)} className="w-full h-40 p-5 rounded-2xl outline-none bg-white border-2 text-right shadow-sm focus:border-blue-500" placeholder={t.placeholder_step5}></textarea>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
