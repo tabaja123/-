@@ -13,7 +13,7 @@ interface Step1Props {
   language: Language;
 }
 
-// פונקציות עזר לפיענוח אודיו - חובה לשימוש עם Gemini TTS
+// Helper: Decode Base64 to Uint8Array
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -23,6 +23,7 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
+// Helper: Convert PCM bytes to AudioBuffer
 async function decodeAudioData(
   data: Uint8Array,
   ctx: AudioContext,
@@ -50,10 +51,14 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
   const playAudioMediation = async () => {
     if (isSpeaking || isLoadingAudio) return;
     
-    // שליפת המפתח מהסביבה של Netlify
     const apiKey = process.env.API_KEY;
+    
+    // Check for missing key and alert user clearly
     if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "null") {
-      alert(language === 'ar' ? "مفتاح API غير متوفر. يرجى ضبطه في إعدادات Netlify." : "מפתח API לא נמצא. אנא הגדירו API_KEY ב-Netlify ובצעו Deploy מחדש.");
+      const msg = language === 'ar' 
+        ? "مفتاح API غير متوفر. يرجى ضبط API_KEY في إعدادات Netlify." 
+        : "מפתח API חסר. אנא הגדירו את API_KEY בהגדרות ה-Environment Variables ב-Netlify.";
+      alert(msg);
       return;
     }
 
@@ -75,7 +80,6 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         
-        // פתרון חסימת אוטו-פליי של דפדפנים
         if (audioContext.state === 'suspended') {
           await audioContext.resume();
         }
@@ -93,7 +97,6 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         
         source.onended = () => {
           setIsSpeaking(false);
-          // סגירת הקונטקסט לשמירה על זיכרון
           if (audioContext.state !== 'closed') audioContext.close();
         };
 
@@ -101,13 +104,13 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         setIsSpeaking(true);
         source.start(0);
       } else {
-        throw new Error("No audio content returned");
+        throw new Error("Empty audio response from Gemini");
       }
     } catch (error) {
-      console.error("Audio Error:", error);
+      console.error("TTS Error:", error);
       setIsLoadingAudio(false);
       setIsSpeaking(false);
-      alert(language === 'ar' ? "فشل تشغيل الصوت." : "שגיאה בהפעלת האודיו. וודאו שמפתח ה-API תקין ב-Netlify.");
+      alert(language === 'ar' ? "حدث خطأ في تشغيل الصوت." : "שגיאה בהפעלת האודיו. ייתכן שהמפתח אינו תקין.");
     }
   };
 
