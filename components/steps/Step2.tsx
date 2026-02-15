@@ -26,7 +26,9 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
     setIsLoadingAudio(true);
     try {
       const apiKey = process.env.API_KEY;
-      if (!apiKey || apiKey === "undefined") throw new Error("API_KEY missing");
+      if (!apiKey || apiKey === "undefined" || apiKey === "null" || apiKey === "") {
+        throw new Error("API_KEY missing");
+      }
       
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({

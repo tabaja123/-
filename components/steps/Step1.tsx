@@ -22,8 +22,8 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
     if (isSpeaking || isLoadingAudio) return;
     
     const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === "undefined" || apiKey === "") {
-      console.error("Gemini API Key is missing. Please ensure the API_KEY environment variable is set in your hosting provider (e.g. Netlify).");
+    if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "null") {
+      console.error("Gemini API Key is missing. Ensure the API_KEY environment variable is set in Netlify settings.");
       alert(language === 'ar' ? "مفتاح API غير متوفر. يرجى التحقق من إعدادات النظام." : "מפתח API לא הוגדר. אנא בדקו את הגדרות המערכת.");
       return;
     }
@@ -44,6 +44,8 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        
+        // Critical for production/Netlify: Ensure context is resumed after user interaction
         if (audioContext.state === 'suspended') {
           await audioContext.resume();
         }
@@ -55,7 +57,6 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
           bytes[i] = binaryString.charCodeAt(i);
         }
         
-        // Use a safer way to get Int16 view to avoid alignment issues
         const dataInt16 = new Int16Array(bytes.buffer, 0, Math.floor(len / 2));
         const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
@@ -76,7 +77,7 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         setIsLoadingAudio(false);
       }
     } catch (error) {
-      console.error("Audio playback error details:", error);
+      console.error("Audio playback error:", error);
       setIsLoadingAudio(false);
       setIsSpeaking(false);
       alert(language === 'ar' ? "حدث خطأ أثناء تحميل الصوت." : "שגיאה בטעינת האודיו.");

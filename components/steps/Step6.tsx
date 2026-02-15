@@ -25,7 +25,10 @@ const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitt
     if (isSpeaking || isLoadingAudio) return;
     setIsLoadingAudio(true);
     try {
-      const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) });
+      const apiKey = process.env.API_KEY;
+      if (!apiKey || apiKey === "undefined" || apiKey === "null" || apiKey === "") throw new Error("API_KEY missing");
+      
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
         contents: [{ parts: [{ text: t.step6_tts }] }],
@@ -38,11 +41,13 @@ const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitt
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        if (audioContext.state === 'suspended') await audioContext.resume();
+
         const binaryString = atob(base64Audio);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
         
-        const dataInt16 = new Int16Array(bytes.buffer);
+        const dataInt16 = new Int16Array(bytes.buffer, 0, Math.floor(bytes.length / 2));
         const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
@@ -59,8 +64,10 @@ const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitt
         setIsLoadingAudio(false);
       }
     } catch (e) { 
+      console.error("Audio error Step 6:", e);
       setIsLoadingAudio(false);
       setIsSpeaking(false); 
+      alert(language === 'ar' ? "فشل تشغيل الصوت." : "נכשל בהפעלת האודיו.");
     }
   };
 
