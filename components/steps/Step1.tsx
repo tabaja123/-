@@ -22,8 +22,9 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
     if (isSpeaking || isLoadingAudio) return;
     
     const apiKey = process.env.API_KEY;
-    if (!apiKey) {
-      alert(language === 'ar' ? "مفتاح API غير متوفر." : "מפתח API לא הוגדר.");
+    if (!apiKey || apiKey === "undefined" || apiKey === "") {
+      console.error("Gemini API Key is missing. Please ensure the API_KEY environment variable is set in your hosting provider (e.g. Netlify).");
+      alert(language === 'ar' ? "مفتاح API غير متوفر. يرجى التحقق من إعدادات النظام." : "מפתח API לא הוגדר. אנא בדקו את הגדרות המערכת.");
       return;
     }
 
@@ -43,8 +44,10 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        
-        // Faster decoding logic
+        if (audioContext.state === 'suspended') {
+          await audioContext.resume();
+        }
+
         const binaryString = atob(base64Audio);
         const len = binaryString.length;
         const bytes = new Uint8Array(len);
@@ -52,7 +55,8 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
           bytes[i] = binaryString.charCodeAt(i);
         }
         
-        const dataInt16 = new Int16Array(bytes.buffer);
+        // Use a safer way to get Int16 view to avoid alignment issues
+        const dataInt16 = new Int16Array(bytes.buffer, 0, Math.floor(len / 2));
         const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < dataInt16.length; i++) {
@@ -72,9 +76,10 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         setIsLoadingAudio(false);
       }
     } catch (error) {
-      console.error("Audio playback error:", error);
+      console.error("Audio playback error details:", error);
       setIsLoadingAudio(false);
       setIsSpeaking(false);
+      alert(language === 'ar' ? "حدث خطأ أثناء تحميل الصوت." : "שגיאה בטעינת האודיו.");
     }
   };
 
