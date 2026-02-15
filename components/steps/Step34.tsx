@@ -1,6 +1,5 @@
 
 import React, { useState } from 'react';
-import { GoogleGenAI, Modality } from "@google/genai";
 import { Language } from '../../types';
 import { translations } from '../../locales';
 
@@ -11,63 +10,9 @@ interface Step34Props {
   language: Language;
 }
 
-function decodeBase64(base64: string) {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-  return bytes;
-}
-
-async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
-  const dataInt16 = new Int16Array(data.buffer);
-  const frameCount = dataInt16.length / numChannels;
-  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-  for (let channel = 0; channel < numChannels; channel++) {
-    const channelData = buffer.getChannelData(channel);
-    for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
-  }
-  return buffer;
-}
-
 const Step34: React.FC<Step34Props> = ({ answers, onAnswerChange, isStep4, language }) => {
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [isResponseBankOpen, setIsResponseBankOpen] = useState(false);
   const t = translations[language];
-
-  const playAudioMediation = async () => {
-    if (isSpeaking || isLoadingAudio) return;
-    const apiKey = process.env.API_KEY;
-    if (!apiKey || apiKey === "undefined") return;
-    setIsLoadingAudio(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: isStep4 ? t.step4_tts : t.step3_tts }] }],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: t.voice } } },
-        },
-      });
-      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      if (base64Audio) {
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        if (audioContext.state === 'suspended') await audioContext.resume();
-        const audioBuffer = await decodeAudioData(decodeBase64(base64Audio), audioContext, 24000, 1);
-        const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
-        source.connect(audioContext.destination);
-        source.onended = () => { setIsSpeaking(false); audioContext.close(); };
-        setIsLoadingAudio(false);
-        setIsSpeaking(true);
-        source.start(0);
-      }
-    } catch (e) {
-      setIsLoadingAudio(false);
-      setIsSpeaking(false);
-    }
-  };
 
   const regulatedExamples = [t.resp_reg_1, t.resp_reg_2, t.resp_reg_3, t.resp_reg_4];
   const impulsiveExamples = [t.resp_imp_1, t.resp_imp_2, t.resp_imp_3, t.resp_imp_4];
@@ -80,29 +25,22 @@ const Step34: React.FC<Step34Props> = ({ answers, onAnswerChange, isStep4, langu
 
   return (
     <div className="animate-fade-in space-y-12 text-right">
-      <div className={`p-8 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 border-b-8 ${isStep4 ? 'bg-emerald-800 border-emerald-600' : 'bg-blue-900 border-blue-600'} text-white`}>
-        <div className="flex items-center gap-5 text-right flex-grow">
-          <div className="w-20 h-20 bg-white/10 rounded-3xl flex items-center justify-center text-4xl">{isStep4 ? '📊' : '⚙️'}</div>
-          <div className="flex-grow">
-            <h3 className="text-2xl font-black mb-1">{isStep4 ? t.step4_name : t.step3_name}</h3>
-            <p className="text-blue-100 mb-4">{isStep4 ? t.step4_instr : t.step3_instr}</p>
-            <button 
-              onClick={playAudioMediation} 
-              disabled={isSpeaking || isLoadingAudio} 
-              className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-black shadow-lg transition active:scale-95 flex items-center gap-2"
-            >
-              {isLoadingAudio ? '...' : isSpeaking ? t.reading : t.listenInstructions}
-            </button>
+      <header className={`rounded-[3rem] p-10 text-white shadow-xl border-b-8 ${isStep4 ? 'bg-gradient-to-br from-emerald-600 to-teal-800 border-emerald-900/30' : 'bg-gradient-to-br from-blue-700 to-indigo-800 border-blue-900/30'}`}>
+        <div className="flex flex-col md:flex-row items-center gap-8">
+          <div className="text-6xl bg-white/10 p-6 rounded-3xl shrink-0">{isStep4 ? '📊' : '⚙️'}</div>
+          <div>
+            <h2 className="text-4xl font-black mb-3">{isStep4 ? t.step4_name : t.step3_name}</h2>
+            <p className="text-blue-50 text-xl leading-relaxed max-w-2xl">{isStep4 ? t.step4_instr : t.step3_instr}</p>
           </div>
         </div>
-      </div>
+      </header>
 
       {!isStep4 ? (
         <section className="bg-white p-10 rounded-[3rem] border-2 border-slate-50 shadow-lg">
           <div className="flex justify-between items-center mb-8">
             <div className="flex items-center gap-3">
               <h4 className="text-2xl font-black text-slate-800">{t.responseBankTitle}:</h4>
-              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-black">10 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+              <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-sm font-black">10 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
             </div>
             <button onClick={() => setIsResponseBankOpen(!isResponseBankOpen)} className="bg-blue-50 text-blue-700 px-8 py-3 rounded-2xl font-black border-2 border-blue-100 hover:bg-blue-100 transition-all">
               {isResponseBankOpen ? t.close : t.open_bank}
@@ -129,11 +67,11 @@ const Step34: React.FC<Step34Props> = ({ answers, onAnswerChange, isStep4, langu
             </div>
           )}
           <label className="block font-black text-slate-700 mb-3 text-xl">{t.label_response}</label>
-          <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-44 p-6 rounded-3xl border-2 outline-none text-right focus:border-blue-500 shadow-inner bg-slate-50/30" placeholder={t.describeCase}></textarea>
+          <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-44 p-6 rounded-[2rem] border-2 outline-none text-right focus:border-blue-500 shadow-inner bg-slate-50/30" placeholder={t.describeCase}></textarea>
         </section>
       ) : (
         <div className="space-y-12">
-          <section className="bg-white p-12 rounded-[3.5rem] border-4 border-slate-100 shadow-2xl flex flex-col items-center">
+          <section className="bg-white p-12 rounded-[3.5rem] border-4 border-slate-50 shadow-2xl flex flex-col items-center">
              <div className="relative w-full max-w-md aspect-square flex items-center justify-center">
                 <div className="absolute top-0 left-1/2 -translate-x-1/2 bg-emerald-500 text-white px-8 py-4 rounded-xl font-black text-xl shadow-lg z-10">{(t as any).cycle_efficacy}</div>
                 <div className="absolute right-0 top-1/2 -translate-y-1/2 bg-indigo-400 text-white px-8 py-4 rounded-xl font-black text-xl shadow-lg z-10">{(t as any).cycle_performance}</div>
@@ -142,7 +80,7 @@ const Step34: React.FC<Step34Props> = ({ answers, onAnswerChange, isStep4, langu
                    <svg viewBox="0 0 100 100" className="w-full h-full text-rose-500 fill-current opacity-80"><path d="M 50,10 A 40,40 0 1,1 10,50" fill="none" stroke="currentColor" strokeWidth="12" strokeLinecap="round" /><polygon points="10,50 0,40 20,40" /></svg>
                 </div>
              </div>
-             <p className="mt-12 text-center text-slate-600 font-bold max-w-lg mx-auto leading-relaxed">
+             <p className="mt-12 text-center text-slate-600 font-bold max-w-lg mx-auto leading-relaxed text-lg">
                 {(language === 'ar' ? 'تفاعل هذه العناصر يخلق حلقة تغذية راجعة تقوي مهارات التنظيم الذاتي لديك.' : 'הקשר בין המרכיבים הללו יוצר לולאת משוב שמחזקת את יכולת הוויסות העצמי שלך.')}
              </p>
           </section>
@@ -151,16 +89,16 @@ const Step34: React.FC<Step34Props> = ({ answers, onAnswerChange, isStep4, langu
             <div>
               <div className="flex justify-between items-center mb-4">
                 <label className="block font-black text-slate-800 text-xl">{t.label_evaluation}</label>
-                <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-sm font-black">7 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+                <span className="bg-emerald-100 text-emerald-700 px-4 py-1 rounded-full text-sm font-black">7 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
               </div>
-              <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-44 p-6 rounded-3xl border-2 outline-none text-right focus:border-emerald-500 shadow-inner bg-slate-50/30" placeholder={t.describeCase}></textarea>
+              <textarea value={answers[0]} onChange={(e) => onAnswerChange(0, e.target.value)} className="w-full h-44 p-6 rounded-[2rem] border-2 outline-none text-right focus:border-emerald-500 shadow-inner bg-slate-50/30" placeholder={t.describeCase}></textarea>
             </div>
             <div className="pt-8 border-t-2 border-slate-50">
               <div className="flex justify-between items-center mb-4">
                 <label className="block font-black text-slate-800 text-xl">{(t as any).label_efficacy_analysis}</label>
-                <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-black">8 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+                <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-sm font-black">8 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
               </div>
-              <textarea value={answers[2]} onChange={(e) => onAnswerChange(2, e.target.value)} className="w-full h-44 p-6 rounded-3xl border-2 outline-none text-right focus:border-blue-500 shadow-inner bg-blue-50/30" placeholder={t.describeCase}></textarea>
+              <textarea value={answers[2]} onChange={(e) => onAnswerChange(2, e.target.value)} className="w-full h-44 p-6 rounded-[2rem] border-2 outline-none text-right focus:border-blue-500 shadow-inner bg-blue-50/30" placeholder={t.describeCase}></textarea>
             </div>
           </div>
         </div>

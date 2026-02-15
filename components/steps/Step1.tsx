@@ -17,7 +17,7 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
 
   return (
     <div className="animate-fade-in space-y-12 text-right">
-      <header className="bg-gradient-to-br from-blue-700 to-indigo-800 rounded-[3rem] p-10 text-white shadow-xl">
+      <header className="bg-gradient-to-br from-blue-700 to-indigo-800 rounded-[3rem] p-10 text-white shadow-xl border-b-8 border-blue-900/30">
         <div className="flex flex-col md:flex-row items-center gap-8">
           <div className="text-6xl bg-white/10 p-6 rounded-3xl shrink-0">📝</div>
           <div>
@@ -45,9 +45,9 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         </div>
         <div className="mb-4 flex justify-between items-center">
           <label className="block font-black text-slate-700 text-xl">{language === 'ar' ? 'وصف الموقف:' : 'תיאור המקרה:'}</label>
-          <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-black">10 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
+          <span className="bg-blue-100 text-blue-700 px-4 py-1 rounded-full text-sm font-black">10 {language === 'ar' ? 'نقاط' : 'נק\''}</span>
         </div>
-        <textarea value={answer || ''} onChange={(e) => onAnswerChange(e.target.value)} className="w-full p-8 rounded-[2.5rem] border-2 min-h-[250px] outline-none text-right focus:border-blue-500 bg-white shadow-inner" placeholder={t.describeCase}></textarea>
+        <textarea value={answer || ''} onChange={(e) => onAnswerChange(e.target.value)} className="w-full p-8 rounded-[2.5rem] border-2 min-h-[250px] outline-none text-right focus:border-blue-500 bg-white shadow-inner leading-relaxed" placeholder={t.describeCase}></textarea>
       </div>
     </div>
   );
