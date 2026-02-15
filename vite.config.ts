@@ -5,10 +5,11 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // This ensures process.env.API_KEY is replaced with its actual value during the build process
+    // Vite will replace this string with the actual value during build on Netlify
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY),
   },
   build: {
     outDir: 'dist',
+    sourcemap: false,
   }
 });

@@ -49,10 +49,12 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
         
-        const dataInt16 = new Int16Array(bytes.buffer, 0, Math.floor(bytes.length / 2));
+        const dataInt16 = new Int16Array(bytes.buffer);
         const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+        for (let i = 0; i < dataInt16.length; i++) {
+          channelData[i] = dataInt16[i] / 32768.0;
+        }
         
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
@@ -60,7 +62,10 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
         
         setIsLoadingAudio(false);
         setIsSpeaking(true);
-        source.onended = () => setIsSpeaking(false);
+        source.onended = () => {
+          setIsSpeaking(false);
+          audioContext.close();
+        };
         source.start(0);
       } else {
         setIsLoadingAudio(false);
@@ -69,7 +74,6 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
       console.error("Audio error Step 2:", e);
       setIsLoadingAudio(false);
       setIsSpeaking(false); 
-      alert(language === 'ar' ? "فشل تشغيل الصوت." : "נכשל בהפעלת האודיו.");
     }
   };
 
@@ -82,7 +86,7 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
   const getEmotionName = (emo: any) => {
     if (language === 'ar') return emo.name;
     const heMap: Record<string, string> = {
-      'فرح': 'שמחה', 'غضب': 'כעס', 'חزن': 'עצב', 'خوف': 'פחד', 'احباط': 'תסכול',
+      'فرح': 'שמחה', 'غضب': 'כעס', 'حزن': 'עצב', 'خوف': 'פחד', 'احباط': 'תסכול',
       'خجل': 'בושה', 'رفض': 'דחייה', 'ازدراء': 'בוז', 'حماس': 'התלהבות', 'راحة': 'רוגע',
       'فخر': 'גאווה', 'ذنب': 'אשמה', 'חסد': 'קנאה', 'ملل': 'שעמום', 'ارتباك': 'בלבול',
       'وحدة': 'בדידות', 'دهشة': 'הפתעה', 'قلق': 'חרדה', 'رضا': 'שביעות רצון', 'تعب': 'עייפות',

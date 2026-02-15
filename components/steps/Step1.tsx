@@ -13,6 +13,35 @@ interface Step1Props {
   language: Language;
 }
 
+// Utility functions for audio decoding as per Gemini API standards
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+async function decodeAudioData(
+  data: Uint8Array,
+  ctx: AudioContext,
+  sampleRate: number,
+  numChannels: number,
+): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) {
+      channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+    }
+  }
+  return buffer;
+}
+
 const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, onNext, language }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isLoadingAudio, setIsLoadingAudio] = useState(false);
@@ -23,8 +52,7 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
     
     const apiKey = process.env.API_KEY;
     if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "null") {
-      console.error("Gemini API Key is missing. Ensure the API_KEY environment variable is set in Netlify settings.");
-      alert(language === 'ar' ? "مفتاح API غير متوفر. يرجى التحقق من إعدادات النظام." : "מפתח API לא הוגדר. אנא בדקו את הגדרות המערכת.");
+      alert(language === 'ar' ? "مفتاح API غير متوفر. يرجى ضبطه في إعدادات Netlify." : "מפתח API לא הוגדר. אנא וודאו שהגדרתם API_KEY ב-Netlify.");
       return;
     }
 
@@ -42,45 +70,42 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       });
 
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      
       if (base64Audio) {
+        // Use 24000 sample rate as specified for Gemini TTS
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         
-        // Critical for production/Netlify: Ensure context is resumed after user interaction
         if (audioContext.state === 'suspended') {
           await audioContext.resume();
         }
 
-        const binaryString = atob(base64Audio);
-        const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        const dataInt16 = new Int16Array(bytes.buffer, 0, Math.floor(len / 2));
-        const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
-        const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) {
-          channelData[i] = dataInt16[i] / 32768.0;
-        }
+        const audioBuffer = await decodeAudioData(
+          decodeBase64(base64Audio),
+          audioContext,
+          24000,
+          1
+        );
 
         const source = audioContext.createBufferSource();
-        source.buffer = buffer;
+        source.buffer = audioBuffer;
         source.connect(audioContext.destination);
         
+        source.onended = () => {
+          setIsSpeaking(false);
+          audioContext.close();
+        };
+
         setIsLoadingAudio(false);
         setIsSpeaking(true);
-        
-        source.onended = () => setIsSpeaking(false);
         source.start(0);
       } else {
-        setIsLoadingAudio(false);
+        throw new Error("No audio data");
       }
     } catch (error) {
-      console.error("Audio playback error:", error);
+      console.error("TTS Error:", error);
       setIsLoadingAudio(false);
       setIsSpeaking(false);
-      alert(language === 'ar' ? "حدث خطأ أثناء تحميل الصوت." : "שגיאה בטעינת האודיו.");
+      alert(language === 'ar' ? "فشل تشغيل الصوت. يرجى المحاولة لاحقاً." : "שגיאה בהפעלת האודיו. ייתכן שיש בעיה במפתח ה-API.");
     }
   };
 
