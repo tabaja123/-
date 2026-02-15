@@ -14,7 +14,6 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ state, score, onBac
   const [comments, setComments] = useState('');
   const [feedbackCode, setFeedbackCode] = useState('');
   const [activeTab, setActiveTab] = useState<'grading' | 'management'>('grading');
-  const [templateText, setTemplateText] = useState(state.answers[0] || '');
 
   const sections = [
     { title: "תיאור המקרה (שלב 1)", max: 10 },
@@ -44,81 +43,37 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ state, score, onBac
     setFeedbackCode(safeBtoa(JSON.stringify(feedback)));
   };
 
-  const exportProjectBackup = () => {
-    const backupData = {
-      timestamp: new Date().toISOString(),
-      config: state
-    };
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `backup_project_regulation_${new Date().toLocaleDateString()}.json`;
-    link.click();
-  };
-
-  const saveTemplate = () => {
-    if (onUpdateProject) {
-      const newAnswers = [...state.answers];
-      newAnswers[0] = templateText;
-      onUpdateProject({ answers: newAnswers });
-      alert("התבנית נשמרה! סטודנטים שייכנסו לאפליקציה יראו את תיאור המקרה הזה כברירת מחדל.");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-slate-900 p-4 md:p-10 font-sans text-right" dir="rtl">
       <div className="max-w-7xl mx-auto">
         <header className="flex flex-col md:flex-row justify-between items-center mb-8 bg-white p-8 rounded-[3rem] shadow-2xl border-b-8 border-blue-500 gap-6">
           <div className="flex items-center gap-5">
-            <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-lg">👑</div>
+            <div className="w-16 h-16 bg-blue-600 rounded-3xl flex items-center justify-center text-white text-3xl shadow-lg font-bold">T</div>
             <div>
               <h1 className="text-3xl font-black text-slate-800">מרכז ניהול המרצה</h1>
-              <p className="text-slate-500 font-medium">ניהול משימות, בדיקה וגיבוי מערכת</p>
+              <p className="text-slate-500 font-medium">בדיקת עבודות וניהול למידה</p>
             </div>
           </div>
-          <div className="flex gap-4">
-            <button onClick={onBack} className="bg-slate-100 px-8 py-4 rounded-2xl text-slate-600 font-bold border border-slate-200 hover:bg-slate-200 transition-all">חזרה</button>
-          </div>
+          <button onClick={onBack} className="bg-slate-100 px-8 py-4 rounded-2xl text-slate-600 font-bold hover:bg-slate-200 transition-all">חזרה</button>
         </header>
 
-        <div className="flex gap-2 mb-8 bg-white/10 p-2 rounded-3xl w-fit mx-auto">
-          <button 
-            onClick={() => setActiveTab('grading')} 
-            className={`px-8 py-3 rounded-2xl font-black transition-all ${activeTab === 'grading' ? 'bg-blue-600 text-white shadow-lg' : 'text-blue-200 hover:bg-white/5'}`}
-          >
-            בדיקת עבודת סטודנט
-          </button>
-          <button 
-            onClick={() => setActiveTab('management')} 
-            className={`px-8 py-3 rounded-2xl font-black transition-all ${activeTab === 'management' ? 'bg-blue-600 text-white shadow-lg' : 'text-blue-200 hover:bg-white/5'}`}
-          >
-            ניהול וגיבוי הפרויקט
-          </button>
+        <div className="flex gap-4 mb-8">
+          <button onClick={() => setActiveTab('grading')} className={`px-8 py-4 rounded-2xl font-black transition-all ${activeTab === 'grading' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white'}`}>בדיקת עבודה</button>
+          <button onClick={() => setActiveTab('management')} className={`px-8 py-4 rounded-2xl font-black transition-all ${activeTab === 'management' ? 'bg-blue-600 text-white' : 'bg-white/10 text-white'}`}>גיבוי וניהול</button>
         </div>
 
-        {activeTab === 'grading' ? (
+        {activeTab === 'grading' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in">
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white p-10 rounded-[3rem] shadow-2xl">
-                <div className="flex flex-col mb-8">
-                  <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3 mb-2">
-                    <span className="bg-slate-100 p-2 rounded-xl">📄</span>
-                    תשובות הסטודנט: {state.student.fullName || 'לא מזוהה'}
-                  </h2>
-                  <div className="flex gap-4 mr-12">
-                    {state.student.studentId && <span className="text-sm font-bold text-slate-400">ת"ז: {state.student.studentId}</span>}
-                    {state.student.email && <span className="text-sm font-bold text-blue-500">מייל: {state.student.email}</span>}
-                  </div>
+                <div className="flex justify-between items-center mb-8 border-b pb-4">
+                  <h2 className="text-2xl font-black text-slate-800">תשובות: {state.student.fullName}</h2>
+                  <div className="text-slate-400 font-mono text-xs">{state.student.studentId}</div>
                 </div>
-                
-                <div className="space-y-6 max-h-[600px] overflow-y-auto px-4 custom-scrollbar">
+                <div className="space-y-6 max-h-[700px] overflow-y-auto px-4 custom-scrollbar">
                   {sections.map((sec, i) => (
-                    <div key={i} className="p-6 rounded-2xl border-2 bg-slate-50 border-slate-100">
-                      <div className="flex justify-between items-start mb-2">
-                        <span className="px-3 py-1 bg-blue-900 text-white rounded-lg text-[10px] font-black uppercase">{sec.title}</span>
-                        <span className="text-[10px] font-black text-slate-400">מקסימום: {sec.max} נק'</span>
-                      </div>
+                    <div key={i} className="p-6 rounded-2xl border-2 bg-slate-50 border-slate-100 group hover:border-blue-200 transition-colors">
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-[10px] font-black uppercase mb-3 inline-block">{sec.title}</span>
                       <p className="text-lg text-slate-700 whitespace-pre-wrap leading-relaxed">{state.answers[i] || '---'}</p>
                     </div>
                   ))}
@@ -126,68 +81,56 @@ const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ state, score, onBac
               </div>
             </div>
 
-            <div className="space-y-8">
-              <div className="bg-slate-800 p-8 rounded-[3rem] shadow-xl text-white sticky top-10 border-t-8 border-emerald-500">
-                <h3 className="text-2xl font-bold mb-6">📝 ציון ומשוב</h3>
+            <div className="space-y-6">
+              <div className="bg-slate-800 p-8 rounded-[3rem] shadow-xl text-white h-fit">
+                <h3 className="text-2xl font-bold mb-6 flex items-center gap-2"><span>📝</span> ציון ומשוב</h3>
                 <div className="mb-6">
                   <label className="block text-sm font-bold text-slate-400 mb-2">ציון סופי:</label>
                   <input 
                     type="number" 
                     value={finalGrade} 
                     onChange={(e) => setFinalGrade(parseInt(e.target.value))} 
-                    className="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-3xl font-black text-emerald-400 outline-none text-center focus:border-emerald-500 transition-all" 
+                    className="w-full bg-white/10 border border-white/20 rounded-xl p-5 text-4xl font-black text-emerald-400 text-center focus:border-emerald-500 outline-none" 
                   />
                 </div>
                 <div className="mb-6">
-                  <label className="block text-sm font-bold text-slate-400 mb-2">הערות למרצה:</label>
+                  <label className="block text-sm font-bold text-slate-400 mb-2">הערות פדגוגיות:</label>
                   <textarea 
                     value={comments} 
                     onChange={(e) => setComments(e.target.value)} 
-                    className="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-sm h-32 outline-none text-right focus:border-blue-500 transition-all" 
-                    placeholder="כתבו כאן..."
+                    className="w-full bg-white/10 border border-white/20 rounded-xl p-4 text-sm h-40 focus:border-blue-500 outline-none" 
+                    placeholder="כתבו כאן משוב בונה לסטודנט..."
                   ></textarea>
                 </div>
+                
                 {!feedbackCode ? (
-                  <button onClick={generateFeedback} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 rounded-xl font-black text-xl transition-all shadow-xl">יצירת קוד משוב ✨</button>
+                  <button onClick={generateFeedback} className="w-full py-5 bg-emerald-600 hover:bg-emerald-700 rounded-2xl font-black text-xl shadow-lg transition-all active:scale-95">צור קוד משוב ✨</button>
                 ) : (
-                  <div className="bg-white/10 p-4 rounded-2xl border border-emerald-500/30 text-center animate-fade-in">
-                    <p className="text-xs font-bold text-emerald-400 mb-2">הקוד מוכן להעתקה:</p>
-                    <div className="bg-black/40 p-3 rounded-xl break-all text-[8px] font-mono mb-4 max-h-20 overflow-y-auto select-all">{feedbackCode}</div>
-                    <button onClick={() => {navigator.clipboard.writeText(feedbackCode); alert("הקוד הועתק!");}} className="w-full py-3 bg-white text-slate-900 rounded-xl font-bold text-sm">📋 העתק ושלח לסטודנט</button>
+                  <div className="bg-white/10 p-6 rounded-2xl border border-emerald-500/30 text-center animate-fade-in">
+                    <p className="text-xs text-emerald-400 font-bold mb-4">הקוד נוצר! שלחי אותו לסטודנט:</p>
+                    <div className="bg-black/40 p-4 rounded-xl break-all text-[8px] font-mono mb-6 select-all text-slate-300">{feedbackCode}</div>
+                    <button 
+                      onClick={() => {navigator.clipboard.writeText(feedbackCode); alert("קוד המשוב הועתק!");}} 
+                      className="w-full py-4 bg-white text-slate-900 rounded-xl font-black text-sm hover:bg-slate-100"
+                    >
+                      📋 העתק קוד משוב
+                    </button>
+                    <button onClick={() => setFeedbackCode('')} className="mt-4 text-[10px] text-slate-400 underline">ערוך משוב שוב</button>
                   </div>
                 )}
               </div>
             </div>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
-            <div className="bg-white p-10 rounded-[3rem] shadow-2xl">
-              <h2 className="text-2xl font-black mb-6 text-slate-800">🛠️ הגדרת תבנית משימה</h2>
-              <p className="text-slate-500 mb-6 font-medium">כאן תוכלי להגדיר סיטואציה קבועה מראש שתוצג לכל הסטודנטים בפתח המשימה.</p>
-              <textarea 
-                value={templateText}
-                onChange={(e) => setTemplateText(e.target.value)}
-                className="w-full h-48 p-6 rounded-2xl border-2 border-slate-100 mb-6 outline-none focus:border-blue-500 text-right font-medium"
-                placeholder="למשל: תארו מצב של לחץ לקראת מבחן גדול..."
-              ></textarea>
-              <button onClick={saveTemplate} className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-lg shadow-xl hover:bg-blue-700 transition-all">
-                שמירת תבנית משימה 💾
-              </button>
-            </div>
+        )}
 
-            <div className="bg-white p-10 rounded-[3rem] shadow-2xl flex flex-col justify-between">
-              <div>
-                <h2 className="text-2xl font-black mb-6 text-slate-800">📦 גיבוי הפרויקט</h2>
-                <p className="text-slate-500 mb-6 font-medium">מומלץ לבצע גיבוי לפני סיום שיחת הצ'אט. הקובץ מכיל את כל המבנה וההגדרות של האפליקציה שלך.</p>
-                <div className="p-6 bg-amber-50 rounded-2xl border-2 border-amber-100 text-amber-800 mb-8">
-                  <p className="text-sm font-bold">💡 טיפ למרצה:</p>
-                  <p className="text-xs">שמרי את הקובץ במקום בטוח. בשיחה הבאה תוכלי לבקש מה-AI "לטעון" את ההגדרות מהקובץ הזה.</p>
-                </div>
-              </div>
-              <button onClick={exportProjectBackup} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl shadow-2xl hover:bg-black transition-all flex items-center justify-center gap-3">
-                <span>📥</span> הורדת גיבוי פרויקט (JSON)
-              </button>
-            </div>
+        {activeTab === 'management' && (
+          <div className="bg-white p-12 rounded-[4rem] shadow-2xl animate-fade-in text-center">
+            <div className="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 text-4xl">💾</div>
+            <h2 className="text-3xl font-black mb-4">ניהול נתונים</h2>
+            <p className="text-slate-500 mb-10 max-w-md mx-auto">כאן תוכלי להוריד גיבוי של המערכת או לנהל את תבניות המשימה.</p>
+            <button className="bg-slate-900 text-white px-12 py-5 rounded-2xl font-black text-xl shadow-xl hover:bg-black transition-all">
+              הורד גיבוי פרויקט (JSON)
+            </button>
           </div>
         )}
       </div>
