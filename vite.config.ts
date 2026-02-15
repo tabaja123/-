@@ -5,7 +5,6 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   define: {
-    // Vite will replace this string with the actual value during build on Netlify
     'process.env.API_KEY': JSON.stringify(process.env.API_KEY),
   },
   build: {

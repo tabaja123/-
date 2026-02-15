@@ -13,7 +13,7 @@ interface Step1Props {
   language: Language;
 }
 
-// Utility functions for audio decoding as per Gemini API standards
+// פונקציות עזר לפיענוח אודיו - חובה לשימוש עם Gemini TTS
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -50,9 +50,10 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
   const playAudioMediation = async () => {
     if (isSpeaking || isLoadingAudio) return;
     
+    // שליפת המפתח מהסביבה של Netlify
     const apiKey = process.env.API_KEY;
     if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "null") {
-      alert(language === 'ar' ? "مفتاح API غير متوفر. يرجى ضبطه في إعدادات Netlify." : "מפתח API לא הוגדר. אנא וודאו שהגדרתם API_KEY ב-Netlify.");
+      alert(language === 'ar' ? "مفتاح API غير متوفر. يرجى ضبطه في إعدادات Netlify." : "מפתח API לא נמצא. אנא הגדירו API_KEY ב-Netlify ובצעו Deploy מחדש.");
       return;
     }
 
@@ -72,9 +73,9 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       
       if (base64Audio) {
-        // Use 24000 sample rate as specified for Gemini TTS
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         
+        // פתרון חסימת אוטו-פליי של דפדפנים
         if (audioContext.state === 'suspended') {
           await audioContext.resume();
         }
@@ -92,20 +93,21 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
         
         source.onended = () => {
           setIsSpeaking(false);
-          audioContext.close();
+          // סגירת הקונטקסט לשמירה על זיכרון
+          if (audioContext.state !== 'closed') audioContext.close();
         };
 
         setIsLoadingAudio(false);
         setIsSpeaking(true);
         source.start(0);
       } else {
-        throw new Error("No audio data");
+        throw new Error("No audio content returned");
       }
     } catch (error) {
-      console.error("TTS Error:", error);
+      console.error("Audio Error:", error);
       setIsLoadingAudio(false);
       setIsSpeaking(false);
-      alert(language === 'ar' ? "فشل تشغيل الصوت. يرجى المحاولة لاحقاً." : "שגיאה בהפעלת האודיו. ייתכן שיש בעיה במפתח ה-API.");
+      alert(language === 'ar' ? "فشل تشغيل الصوت." : "שגיאה בהפעלת האודיו. וודאו שמפתח ה-API תקין ב-Netlify.");
     }
   };
 
