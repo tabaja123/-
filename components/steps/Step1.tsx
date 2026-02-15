@@ -15,10 +15,11 @@ interface Step1Props {
 
 const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, onNext, language }) => {
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const t = translations[language] as any;
 
   const playAudioMediation = async () => {
-    if (isSpeaking) return;
+    if (isSpeaking || isLoadingAudio) return;
     
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
@@ -26,7 +27,7 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       return;
     }
 
-    setIsSpeaking(true);
+    setIsLoadingAudio(true);
     
     try {
       const ai = new GoogleGenAI({ apiKey });
@@ -43,32 +44,36 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         
-        const decode = (base64: string) => {
-          const binaryString = atob(base64);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-          return bytes;
-        };
+        // Faster decoding logic
+        const binaryString = atob(base64Audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        
+        const dataInt16 = new Int16Array(bytes.buffer);
+        const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < dataInt16.length; i++) {
+          channelData[i] = dataInt16[i] / 32768.0;
+        }
 
-        const decodeAudioData = async (data: Uint8Array, ctx: AudioContext) => {
-          const dataInt16 = new Int16Array(data.buffer);
-          const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
-          const channelData = buffer.getChannelData(0);
-          for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
-          return buffer;
-        };
-
-        const audioBuffer = await decodeAudioData(decode(base64Audio), audioContext);
         const source = audioContext.createBufferSource();
-        source.buffer = audioBuffer;
+        source.buffer = buffer;
         source.connect(audioContext.destination);
+        
+        setIsLoadingAudio(false);
+        setIsSpeaking(true);
+        
         source.onended = () => setIsSpeaking(false);
-        source.start();
+        source.start(0);
       } else {
-        setIsSpeaking(false);
+        setIsLoadingAudio(false);
       }
     } catch (error) {
       console.error("Audio playback error:", error);
+      setIsLoadingAudio(false);
       setIsSpeaking(false);
     }
   };
@@ -84,8 +89,17 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
             <div className="inline-block bg-blue-500 text-white px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest">{t.audioGuide}</div>
             <h2 className="text-4xl font-black">{t.step1_name}</h2>
             <p className="text-blue-100 text-lg leading-relaxed">{t.step1_instr}</p>
-            <button onClick={playAudioMediation} disabled={isSpeaking} className={`flex items-center gap-4 px-10 py-5 rounded-[2rem] font-black text-xl transition shadow-2xl border-b-4 ${isSpeaking ? 'bg-slate-700' : 'bg-emerald-600 border-emerald-800 text-white active:scale-95'}`}>
-              {isSpeaking ? t.reading : t.listenInstructions}
+            <button 
+              onClick={playAudioMediation} 
+              disabled={isSpeaking || isLoadingAudio} 
+              className={`flex items-center gap-4 px-10 py-5 rounded-[2rem] font-black text-xl transition shadow-2xl border-b-4 ${(isSpeaking || isLoadingAudio) ? 'bg-slate-700 opacity-80 cursor-not-allowed' : 'bg-emerald-600 border-emerald-800 text-white active:scale-95'}`}
+            >
+              {isLoadingAudio ? (
+                <span className="flex items-center gap-2">
+                  <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  {language === 'ar' ? 'جاري التحضير...' : 'מכין שמע...'}
+                </span>
+              ) : isSpeaking ? t.reading : t.listenInstructions}
             </button>
           </div>
         </div>

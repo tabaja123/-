@@ -17,19 +17,18 @@ interface Step6Props {
 const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitted, onUpdate, studentName, language }) => {
   const [submissionCode, setSubmissionCode] = useState('');
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const [isTimingGuideOpen, setIsTimingGuideOpen] = useState(true);
   const t = translations[language];
 
   const playAudioMediation = async () => {
-    if (isSpeaking) return;
-    setIsSpeaking(true);
+    if (isSpeaking || isLoadingAudio) return;
+    setIsLoadingAudio(true);
     try {
       const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) });
-      const prompt = t.step6_tts;
-      
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
-        contents: [{ parts: [{ text: prompt }] }],
+        contents: [{ parts: [{ text: t.step6_tts }] }],
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: t.voice } } },
@@ -39,23 +38,30 @@ const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitt
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        const decode = (base64: string) => {
-          const b = atob(base64);
-          const bytes = new Uint8Array(b.length);
-          for (let i = 0; i < b.length; i++) bytes[i] = b.charCodeAt(i);
-          return bytes;
-        };
-        const buffer = audioContext.createBuffer(1, decode(base64Audio).length / 2, 24000);
-        const dataInt16 = new Int16Array(decode(base64Audio).buffer);
+        const binaryString = atob(base64Audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+        
+        const dataInt16 = new Int16Array(bytes.buffer);
+        const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContext.destination);
+        
+        setIsLoadingAudio(false);
+        setIsSpeaking(true);
         source.onended = () => setIsSpeaking(false);
-        source.start();
+        source.start(0);
+      } else {
+        setIsLoadingAudio(false);
       }
-    } catch (e) { setIsSpeaking(false); }
+    } catch (e) { 
+      setIsLoadingAudio(false);
+      setIsSpeaking(false); 
+    }
   };
 
   const safeBtoa = (str: string) => {
@@ -97,14 +103,22 @@ const Step6: React.FC<Step6Props> = ({ state, answers, onAnswerChange, isSubmitt
           <div className="flex-grow">
             <h3 className="text-2xl font-black mb-1">{t.step6_name}</h3>
             <p className="text-slate-400 mb-4">{t.step6_instr}</p>
-            <button onClick={playAudioMediation} disabled={isSpeaking} className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black shadow-xl transition active:scale-95 disabled:opacity-50">
-              {isSpeaking ? t.reading : t.listenInstructions}
+            <button 
+              onClick={playAudioMediation} 
+              disabled={isSpeaking || isLoadingAudio} 
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-10 py-4 rounded-2xl font-black shadow-xl transition active:scale-95 disabled:opacity-50 flex items-center gap-2"
+            >
+              {isLoadingAudio ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  {language === 'ar' ? 'جاري التحضير...' : 'מכין שמע...'}
+                </>
+              ) : isSpeaking ? t.reading : t.listenInstructions}
             </button>
           </div>
         </div>
       </div>
 
-      {/* Timing & Usage Guide Section - Moved from Step 4 */}
       <section className="bg-white p-10 rounded-[3rem] border-2 border-amber-100 shadow-xl overflow-hidden relative">
         <div className="flex justify-between items-center mb-8">
           <h4 className="text-2xl font-black text-slate-800 flex items-center gap-3">

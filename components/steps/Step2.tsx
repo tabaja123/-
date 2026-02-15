@@ -18,11 +18,12 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
   const [isThoughtBankOpen, setIsThoughtBankOpen] = useState(false);
   const [isNeedsBankOpen, setIsNeedsBankOpen] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoadingAudio, setIsLoadingAudio] = useState(false);
   const t = translations[language] as any;
 
   const playAudioMediation = async () => {
-    if (isSpeaking) return;
-    setIsSpeaking(true);
+    if (isSpeaking || isLoadingAudio) return;
+    setIsLoadingAudio(true);
     try {
       const ai = new GoogleGenAI({ apiKey: (process.env.API_KEY as string) });
       const response = await ai.models.generateContent({
@@ -37,15 +38,11 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        const decode = (base64: string) => {
-          const b = atob(base64);
-          const bytes = new Uint8Array(b.length);
-          for (let i = 0; i < b.length; i++) bytes[i] = b.charCodeAt(i);
-          return bytes;
-        };
+        const binaryString = atob(base64Audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
         
-        const audioData = decode(base64Audio);
-        const dataInt16 = new Int16Array(audioData.buffer);
+        const dataInt16 = new Int16Array(bytes.buffer);
         const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
         const channelData = buffer.getChannelData(0);
         for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
@@ -53,10 +50,18 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
         const source = audioContext.createBufferSource();
         source.buffer = buffer;
         source.connect(audioContext.destination);
+        
+        setIsLoadingAudio(false);
+        setIsSpeaking(true);
         source.onended = () => setIsSpeaking(false);
-        source.start();
+        source.start(0);
+      } else {
+        setIsLoadingAudio(false);
       }
-    } catch (e) { setIsSpeaking(false); }
+    } catch (e) { 
+      setIsLoadingAudio(false);
+      setIsSpeaking(false); 
+    }
   };
 
   const toggleEmotion = (emotion: { id: string, name: string }) => {
@@ -68,11 +73,11 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
   const getEmotionName = (emo: any) => {
     if (language === 'ar') return emo.name;
     const heMap: Record<string, string> = {
-      'فرح': 'שמחה', 'غضب': 'כעס', 'حزن': 'עצב', 'خوف': 'פחד', 'احباط': 'תסכול',
+      'فرح': 'שמחה', 'غضب': 'כעס', 'חزن': 'עצב', 'خوف': 'פחד', 'احباط': 'תסכול',
       'خجل': 'בושה', 'رفض': 'דחייה', 'ازدراء': 'בוז', 'حماس': 'התלהבות', 'راحة': 'רוגע',
-      'فخر': 'גאווה', 'ذنب': 'אשמה', 'حסد': 'קנאה', 'ملل': 'שעמום', 'ارتباك': 'בלבול',
-      'وحدة': 'בדידות', 'دهشة': 'הפתעה', 'قלק': 'חרדה', 'رضا': 'שביעות רצון', 'تعب': 'עייפות',
-      'عجز': 'חוסר אונים', 'أمل': 'תקווה', 'ندم': 'חרטה', 'فضول': 'סקרנות'
+      'فخر': 'גאווה', 'ذنب': 'אשמה', 'חסد': 'קנאה', 'ملل': 'שעמום', 'ارتباك': 'בלבול',
+      'وحدة': 'בדידות', 'دهشة': 'הפתעה', 'قلق': 'חרדה', 'رضا': 'שביעות רצון', 'تعب': 'עייפות',
+      'عجز': 'חוסר אונים', 'أمل': 'תקווה', 'ندמ': 'חרטה', 'فضول': 'סקרנות'
     };
     return heMap[emo.name] || emo.name;
   };
@@ -92,8 +97,17 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
           <div className="flex-grow">
             <h3 className="text-2xl font-black mb-1">{t.emotionsTitle}</h3>
             <p className="text-indigo-100 mb-4">{t.step2_instr}</p>
-            <button onClick={playAudioMediation} disabled={isSpeaking} className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-black shadow-lg transition active:scale-95">
-              {isSpeaking ? t.reading : t.listenInstructions}
+            <button 
+              onClick={playAudioMediation} 
+              disabled={isSpeaking || isLoadingAudio} 
+              className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-black shadow-lg transition active:scale-95 flex items-center gap-2"
+            >
+              {isLoadingAudio ? (
+                <>
+                  <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                  {language === 'ar' ? 'تحميل...' : 'טוען...'}
+                </>
+              ) : isSpeaking ? t.reading : t.listenInstructions}
             </button>
           </div>
         </div>
