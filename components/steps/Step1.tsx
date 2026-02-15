@@ -13,7 +13,6 @@ interface Step1Props {
   language: Language;
 }
 
-// Helper: Decode Base64 to Uint8Array
 function decodeBase64(base64: string) {
   const binaryString = atob(base64);
   const bytes = new Uint8Array(binaryString.length);
@@ -23,17 +22,10 @@ function decodeBase64(base64: string) {
   return bytes;
 }
 
-// Helper: Convert PCM bytes to AudioBuffer
-async function decodeAudioData(
-  data: Uint8Array,
-  ctx: AudioContext,
-  sampleRate: number,
-  numChannels: number,
-): Promise<AudioBuffer> {
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
   const dataInt16 = new Int16Array(data.buffer);
   const frameCount = dataInt16.length / numChannels;
   const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
-
   for (let channel = 0; channel < numChannels; channel++) {
     const channelData = buffer.getChannelData(channel);
     for (let i = 0; i < frameCount; i++) {
@@ -50,20 +42,12 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
 
   const playAudioMediation = async () => {
     if (isSpeaking || isLoadingAudio) return;
-    
     const apiKey = process.env.API_KEY;
-    
-    // Check for missing key and alert user clearly
-    if (!apiKey || apiKey === "undefined" || apiKey === "" || apiKey === "null") {
-      const msg = language === 'ar' 
-        ? "مفتاح API غير متوفر. يرجى ضبط API_KEY في إعدادات Netlify." 
-        : "מפתח API חסר. אנא הגדירו את API_KEY בהגדרות ה-Environment Variables ב-Netlify.";
-      alert(msg);
+    if (!apiKey || apiKey === "undefined") {
+      alert(language === 'ar' ? "مفتاح API غير متوفر." : "מפתח API חסר בהגדרות Netlify.");
       return;
     }
-
     setIsLoadingAudio(true);
-    
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
@@ -74,43 +58,23 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: t.voice } } },
         },
       });
-
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-      
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-        
-        if (audioContext.state === 'suspended') {
-          await audioContext.resume();
-        }
-
-        const audioBuffer = await decodeAudioData(
-          decodeBase64(base64Audio),
-          audioContext,
-          24000,
-          1
-        );
-
+        if (audioContext.state === 'suspended') await audioContext.resume();
+        const audioBuffer = await decodeAudioData(decodeBase64(base64Audio), audioContext, 24000, 1);
         const source = audioContext.createBufferSource();
         source.buffer = audioBuffer;
         source.connect(audioContext.destination);
-        
-        source.onended = () => {
-          setIsSpeaking(false);
-          if (audioContext.state !== 'closed') audioContext.close();
-        };
-
+        source.onended = () => { setIsSpeaking(false); audioContext.close(); };
         setIsLoadingAudio(false);
         setIsSpeaking(true);
         source.start(0);
-      } else {
-        throw new Error("Empty audio response from Gemini");
       }
     } catch (error) {
-      console.error("TTS Error:", error);
+      console.error(error);
       setIsLoadingAudio(false);
       setIsSpeaking(false);
-      alert(language === 'ar' ? "حدث خطأ في تشغيل الصوت." : "שגיאה בהפעלת האודיו. ייתכן שהמפתח אינו תקין.");
     }
   };
 
@@ -125,17 +89,8 @@ const Step1: React.FC<Step1Props> = ({ data, answer, onAnswerChange, onChange, o
             <div className="inline-block bg-blue-500 text-white px-4 py-1 rounded-full text-xs font-black uppercase tracking-widest">{t.audioGuide}</div>
             <h2 className="text-4xl font-black">{t.step1_name}</h2>
             <p className="text-blue-100 text-lg leading-relaxed">{t.step1_instr}</p>
-            <button 
-              onClick={playAudioMediation} 
-              disabled={isSpeaking || isLoadingAudio} 
-              className={`flex items-center gap-4 px-10 py-5 rounded-[2rem] font-black text-xl transition shadow-2xl border-b-4 ${(isSpeaking || isLoadingAudio) ? 'bg-slate-700 opacity-80 cursor-not-allowed' : 'bg-emerald-600 border-emerald-800 text-white active:scale-95'}`}
-            >
-              {isLoadingAudio ? (
-                <span className="flex items-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  {language === 'ar' ? 'جاري التحضير...' : 'מכין שמע...'}
-                </span>
-              ) : isSpeaking ? t.reading : t.listenInstructions}
+            <button onClick={playAudioMediation} disabled={isSpeaking || isLoadingAudio} className={`flex items-center gap-4 px-10 py-5 rounded-[2rem] font-black text-xl transition shadow-2xl border-b-4 ${(isSpeaking || isLoadingAudio) ? 'bg-slate-700 opacity-80' : 'bg-emerald-600 border-emerald-800 text-white active:scale-95'}`}>
+              {isLoadingAudio ? '...' : isSpeaking ? t.reading : t.listenInstructions}
             </button>
           </div>
         </div>

@@ -13,6 +13,24 @@ interface Step2Props {
   language: Language;
 }
 
+function decodeBase64(base64: string) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
+  return bytes;
+}
+
+async function decodeAudioData(data: Uint8Array, ctx: AudioContext, sampleRate: number, numChannels: number): Promise<AudioBuffer> {
+  const dataInt16 = new Int16Array(data.buffer);
+  const frameCount = dataInt16.length / numChannels;
+  const buffer = ctx.createBuffer(numChannels, frameCount, sampleRate);
+  for (let channel = 0; channel < numChannels; channel++) {
+    const channelData = buffer.getChannelData(channel);
+    for (let i = 0; i < frameCount; i++) channelData[i] = dataInt16[i * numChannels + channel] / 32768.0;
+  }
+  return buffer;
+}
+
 const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpdate, language }) => {
   const [isEmotionBankOpen, setIsEmotionBankOpen] = useState(false);
   const [isThoughtBankOpen, setIsThoughtBankOpen] = useState(false);
@@ -23,13 +41,10 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
 
   const playAudioMediation = async () => {
     if (isSpeaking || isLoadingAudio) return;
+    const apiKey = process.env.API_KEY;
+    if (!apiKey || apiKey === "undefined") return;
     setIsLoadingAudio(true);
     try {
-      const apiKey = process.env.API_KEY;
-      if (!apiKey || apiKey === "undefined" || apiKey === "null" || apiKey === "") {
-        throw new Error("API_KEY missing");
-      }
-      
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-preview-tts",
@@ -39,41 +54,22 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
           speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: t.voice } } },
         },
       });
-
       const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
       if (base64Audio) {
         const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
         if (audioContext.state === 'suspended') await audioContext.resume();
-
-        const binaryString = atob(base64Audio);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
-        
-        const dataInt16 = new Int16Array(bytes.buffer);
-        const buffer = audioContext.createBuffer(1, dataInt16.length, 24000);
-        const channelData = buffer.getChannelData(0);
-        for (let i = 0; i < dataInt16.length; i++) {
-          channelData[i] = dataInt16[i] / 32768.0;
-        }
-        
+        const audioBuffer = await decodeAudioData(decodeBase64(base64Audio), audioContext, 24000, 1);
         const source = audioContext.createBufferSource();
-        source.buffer = buffer;
+        source.buffer = audioBuffer;
         source.connect(audioContext.destination);
-        
+        source.onended = () => { setIsSpeaking(false); audioContext.close(); };
         setIsLoadingAudio(false);
         setIsSpeaking(true);
-        source.onended = () => {
-          setIsSpeaking(false);
-          audioContext.close();
-        };
         source.start(0);
-      } else {
-        setIsLoadingAudio(false);
       }
-    } catch (e) { 
-      console.error("Audio error Step 2:", e);
+    } catch (e) {
       setIsLoadingAudio(false);
-      setIsSpeaking(false); 
+      setIsSpeaking(false);
     }
   };
 
@@ -88,9 +84,9 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
     const heMap: Record<string, string> = {
       'فرح': 'שמחה', 'غضب': 'כעס', 'حزن': 'עצב', 'خوف': 'פחד', 'احباط': 'תסכול',
       'خجل': 'בושה', 'رفض': 'דחייה', 'ازدراء': 'בוז', 'حماس': 'התלהבות', 'راحة': 'רוגע',
-      'فخر': 'גאווה', 'ذنب': 'אשמה', 'חסد': 'קנאה', 'ملل': 'שעמום', 'ارتباك': 'בלבול',
+      'فخر': 'גאווה', 'ذنب': 'אשמה', 'חסד': 'קנאה', 'ملل': 'שעמום', 'ارتباك': 'בלבול',
       'وحدة': 'בדידות', 'دهشة': 'הפתעה', 'قلق': 'חרדה', 'رضا': 'שביעות רצון', 'تعب': 'עייפות',
-      'عجز': 'חוסר אונים', 'أمل': 'תקווה', 'ندמ': 'חרטה', 'فضول': 'סקרנות'
+      'عجز': 'חוסר אונים', 'أمل': 'תקווה', 'נדמ': 'חרטה', 'فضול': 'סקרנות'
     };
     return heMap[emo.name] || emo.name;
   };
@@ -115,12 +111,7 @@ const Step2: React.FC<Step2Props> = ({ emotions, answers, onAnswerChange, onUpda
               disabled={isSpeaking || isLoadingAudio} 
               className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-black shadow-lg transition active:scale-95 flex items-center gap-2"
             >
-              {isLoadingAudio ? (
-                <>
-                  <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                  {language === 'ar' ? 'تحميل...' : 'טוען...'}
-                </>
-              ) : isSpeaking ? t.reading : t.listenInstructions}
+              {isLoadingAudio ? '...' : isSpeaking ? t.reading : t.listenInstructions}
             </button>
           </div>
         </div>
